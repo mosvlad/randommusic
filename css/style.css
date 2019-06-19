@@ -1,11 +1,25 @@
+
 /* Font Family
 ================================================== */
 
 @import url("//fonts.googleapis.com/css?family=Yanone+Kaffeesatz:200,300,400");
 
+#background {
+    width: 100%; 
+    height: 100%; 
+    position: fixed; 
+    left: 0px; 
+    top: 0px; 
+    z-index: -1; /* Ensure div tag stays behind content; -999 might work, too. */
+}
+
+.stretch {
+    width:100%;
+    height:100%;
+}
+
 .bg{
 background: no-repeat center center fixed;
-background-size: auto;	
 }
 
 .title {
@@ -14,13 +28,14 @@ background-size: auto;
   font-size: 35px;
   transition: all 0.5s;
   padding: 50px;
+  text-shadow: 1px 1px 2px black, 0 0 1em black;
 
 }
 
 .title::selection
 {
 	color: #FFFFFF;
-	background: #aaeeaa;
+	background: #f4511e;
 }
 
 .button {
@@ -58,7 +73,6 @@ background-size: auto;
   opacity: 1;
   right: 0;
 }
-
 
 
 /* Desktop
@@ -164,7 +178,7 @@ p a,p a:visited { line-height:inherit; }
 /* Default / Desktop / Firefox */
 audio { margin:0 15px 0 14px; width:670px; }
 #mainwrap { /* add box-shadow or other styles here */ }
-#audiowrap { background-color:#231F20; margin:0 auto; }
+#audiowrap { background-color:#FFFFFF99; margin:0 auto; }
 #plwrap { margin:0 auto; }
 #tracks { min-height:65px; text-align:center; text-decoration:none; top:13px; }
 #nowPlay { display:inline; }
