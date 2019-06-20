@@ -11,7 +11,7 @@ if (/(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elain
 	
 	if (isMobile)
 	{
-		alert("Фоны для мобилочки скоро поправлю! ^_^");
+		//alert("Фоны для мобилочки скоро поправлю! ^_^");
 	}
 });
 
@@ -43,12 +43,13 @@ function Init()
 function randombg()
 {
 	//document.body.style.backgroundImage = 'url(img/' + (Math.floor(Math.random() * 19) + 1) + ".jpg" + ')';
-	document.getElementById("bg").src = 'img/' + (Math.floor(Math.random() * 19) + 1) + ".jpg";
+	document.getElementById("bg").style.backgroundImage = "url('img/" + (Math.floor(Math.random() * 19) + 1) + ".jpg')";
 }
 		
 function GetNext()
 {
-	
+	var tags;
+	var TitleStr;
 	gtag('ButtonNext', 'Next');
 	window.dataLayer = window.dataLayer || [];
 	function gtag(){dataLayer.push(arguments);}
@@ -62,19 +63,22 @@ function GetNext()
 	element.src = currentPath;
 	
 	ID3.loadTags(currentPath, function() {
-    var tags = ID3.getAllTags(currentPath);
-	document.getElementById("title").innerHTML = tags.artist + " - " + tags.title;
-	document.title = tags.artist + " - " + tags.title;
+    tags = ID3.getAllTags(currentPath);
+	TitleStr = tags.artist + " - " + tags.title + " ";
+	document.getElementById("nowplaying").innerHTML = TitleStr;
+	document.title = TitleStr;
 	
-	(function titleScroller(text) {
-    document.title = text;
-    setTimeout(function () {
-        titleScroller(text.substr(1) + text.substr(0, 1));
-    }, 250);
-	}(tags.artist + " - " + tags.title + " "));
-	
-    console.log(tags.artist + " - " + tags.title + ", " + tags.album);
-});
+	//(function titleScroller(text) {
+    //document.title = text;
+    //setTimeout(function () {
+    //    titleScroller(text.substr(1) + text.substr(0, 1));
+    //}, 250);
+	//}(TitleStr));
 		
+    //console.log(tags.artist + " - " + tags.title + ", " + tags.album);
+});
+	
+
+	
 	document.getElementById("audio1").load();
 }
