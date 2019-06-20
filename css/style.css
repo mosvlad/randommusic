@@ -27,7 +27,7 @@ body{
 
 #audio1{width:100%;filter: contrast(64%) invert(100%); outline: none;}
 
-#btn{outline: none; color: #fff; background: #50505099; width: 200px; height: 80px; border: none; border-radius: 5px; transition-duration: 100ms;}
+#btn{outline: none; color: #fff; background: #50505099; width: 200px; height: 80px; border: none; border-radius: 5px; transition-duration: 100ms; cursor: pointer;}
 #btn:hover{transition-duration: 100ms; background: #60606099;}
 #btn:active{transition-duration: 100ms; background: #20202099;}
 
