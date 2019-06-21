@@ -1,0 +1,110 @@
+.main-bg
+  width: 100%
+  height: 100%
+  background-size: cover
+  background-attachment: fixed
+  background-position: center
+  background-repeat: no-repeat
+  position: absolute
+  z-index: -2
+  filter: blur(5px)
+
+
+
+.filter-bg
+  width: 100%
+  height: 100%
+  position: absolute
+  background: #30303080
+  z-index: -1
+
+
+
+.main-container
+  max-width: 1140px
+  height: 100vh
+  padding: 30px 0
+  margin: auto
+  display: flex
+  flex-direction: column
+  justify-content: space-between
+  color: white
+  font-family: Oswald, sans-serif
+  font-size: 20px
+  box-sizing: border-box
+
+
+
+.audio-container
+  text-align: center
+
+  &__title
+    margin: 0
+    margin-bottom: 30px
+    position: relative
+    font-size: 30px
+    font-weight: 300
+    line-height: 50px
+    &:before, &:after
+      content: ''
+      position: absolute
+      left: 0
+      width: 100%
+      height: 1px
+      background-color: #fff
+    &:before
+      top: 0
+    &:after
+      bottom: 0
+
+  &__caption
+    display: block
+
+  &__song-name
+    display: block
+    margin-bottom: 30px
+    font-size: 35px
+    font-weight: bold
+
+  &__player
+    width: 100%
+    margin-bottom: 50px
+    filter: contrast(64%) invert(100%)
+    outline: none
+
+  &__random-button
+    width: 200px
+    height: 80px
+    margin-bottom: 20px
+    color: #fff
+    text-transform: uppercase
+    background: #50505099
+    border: none
+    border-radius: 5px
+    transition: 0.1s linear
+    outline: none
+    cursor: pointer
+    &:hover
+      background: #60606099
+    &:active
+      background: #20202099
+
+
+
+.footer-links
+  width: 100%
+  text-align: center
+
+  &__link
+    margin: 0px 20px
+    color: #ffffff99
+
+  &__authors
+    font-size: 14px
+    padding-top: 15px
+
+  &__author-link
+    display: block
+    font-size: 12px
+
+
