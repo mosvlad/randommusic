@@ -1,0 +1,22 @@
+@import _font-face.sass
+
+body
+  margin: 0
+  padding: 0
+  background: #101010
+
+button, a
+  color: white
+  font-family: Oswald, sans-serif
+  font-size: 20px
+
+
+// desktop first
+@import media/_desktop
+
+// mobile
+@media screen and (max-width: 767px)
+  @import media/_mobile
+// tablet
+@media screen and (min-width: 768px) and (max-width: 1220px)
+  @import media/_tablet
