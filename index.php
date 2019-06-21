@@ -46,16 +46,18 @@
 			<br>
 		</div>
 	</div>
+	
 	<div class="links">
 		<center>
 			<a id="icon_lnk" target="_blank" rel="noopener noreferrer" href = "https://t.me/randommusic8081">Telegram</a>
 			<a id="icon_lnk" >Upload</a>
 			<a id="icon_lnk" >About</a>
 		</center>
+		
 		<center>
 			<div id = "info">
-			created by: <a id = "info" target="_blank" rel="noopener noreferrer" href = "https://t.me/Faust_z">Faust</a><br>
-			designed by: <a id = "info" target="_blank" rel="noopener noreferrer" href = "https://t.me/expl0si0ntim3r">AFTERLIFE</a>
+			created by: <a id = "info" href = "https://t.me/Faust_z">Faust</a><br>
+			designed by: <a id = "info" href = "http://expl0si0ntim3r.insomnia247.nl">EXPL0Si0NTiM3R</a>
 			</div>	
 		</center>	
 	</div>
