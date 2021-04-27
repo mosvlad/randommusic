@@ -1,5 +1,7 @@
 
 var paths;
+var dayModeBg = false;
+var tracks_history = [];
 
 $(document).ready(function MobileCheck()
 {	
@@ -15,35 +17,67 @@ if (/(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elain
 	}
 });
 
-
-function loadFile(filePath) {
-  var result = null;
-  var xmlhttp = new XMLHttpRequest();
-  xmlhttp.open("GET", filePath, false);
-  xmlhttp.send();
-  if (xmlhttp.status==200) {
-    result = xmlhttp.responseText;
-  }
-		
-  paths = result.split("\n");
+function InitLastDonate()
+{
+	$.ajax(
+	{
+		url: 'https://www.donationalerts.com/api/v1/alerts/donations',
+		type: 'get',
+		contentType: 'application/json',
+		headers: {
+			'Authorization': 'Bearer'
+		},
+		success: function(output)
+		{
+			alert(output);
+		}
+	});
 }
+
 
 function Init()
 {
-	setTimeout(
-	function () 
-	{
-		randombg();
-    }, 100);
-	
-	loadFile("paths.conf");
+	var mus = document.getElementById("audio1");
+	mus.volume = 0.5;
+	//randombg();
 	GetNext();
+	InitLastDonate();
 }
 
 function randombg()
 {
-	//document.body.style.backgroundImage = 'url(img/' + (Math.floor(Math.random() * 19) + 1) + ".jpg" + ')';
 	document.getElementById("bg").style.backgroundImage = "url('img/" + (Math.floor(Math.random() * 19) + 1) + ".jpg')";
+	document.getElementById("bg").style.translation = "3s linear";
+}
+
+function changeBg()
+{
+	if (dayModeBg)
+	{	
+		document.body.style.backgroundImage = 'url(img/bg_night.jpg)';
+		dayModeBg = false;
+	}
+	else
+	{
+		document.body.style.backgroundImage = 'url(img/bg_day.jpg)';
+		dayModeBg = true;
+	}
+}
+
+function PlayMusicByURL(URL)
+{
+	var element = document.getElementById("audio1"); 
+	element.src = URL;
+
+	tags = ID3.getAllTags(decodeURIComponent(URL));
+	TitleStr = tags.artist + " - " + tags.title + " ";
+	document.getElementById("nowplaying").innerHTML = TitleStr;
+
+}
+
+function tenshi()
+{
+	document.body.style.backgroundImage = "url('img/tenshi" + (Math.floor(Math.random() * 2) + 1) + ".jpg')";
 }
 		
 function GetNext()
@@ -56,29 +90,30 @@ function GetNext()
 	gtag('js', new Date());
 
 	gtag('config', 'UA-141793479-1');
-	
-	var element = document.getElementById("audio1");
-	var currentPath = paths[Math.floor(Math.random() * paths.length)];
-	
-	element.src = currentPath;
-	
-	ID3.loadTags(currentPath, function() {
-    tags = ID3.getAllTags(currentPath);
-	TitleStr = tags.artist + " - " + tags.title + " ";
-	document.getElementById("nowplaying").innerHTML = TitleStr;
-	document.title = TitleStr;
-	
-	//(function titleScroller(text) {
-    //document.title = text;
-    //setTimeout(function () {
-    //    titleScroller(text.substr(1) + text.substr(0, 1));
-    //}, 250);
-	//}(TitleStr));
-		
-    //console.log(tags.artist + " - " + tags.title + ", " + tags.album);
-});
-	
 
-	
-	document.getElementById("audio1").load();
+	$.ajax(
+	{
+		url: '/getfile.php',
+		type: 'post',
+		success: function(output) 
+		{
+			var element = document.getElementById("audio1"); 
+			var currentPath = "https://randommusic.insomnia247.nl" + output;
+			//console.log(output);
+            
+            element.src = currentPath;
+
+			ID3.loadTags(currentPath, function() 
+			{
+				tags = ID3.getAllTags(currentPath);
+				TitleStr = tags.artist + " - " + tags.title + " ";
+				document.getElementById("nowplaying").innerHTML = TitleStr;
+				tracks_history[TitleStr] = currentPath;
+				
+				document.getElementById("tracks_history").innerHTML += '<li class = "tracks_history" onclick = PlayMusicByURL("' + encodeURI(currentPath) + '")>' + TitleStr + '</li>';
+				
+				//document.title = TitleStr;
+			});
+		}
+	});
 }
