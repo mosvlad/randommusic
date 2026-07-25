@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+#
+# Э7: уборка мёртвого кода v1 из веб-корня.
+#
+# Запускать ПОСЛЕ выкатки v2 на прод и проверки, что всё работает.
+#
+#   bin/cleanup-v1            показать, что будет удалено
+#   bin/cleanup-v1 --apply    удалить
+#
+# Статику v1 (css/, js/, img/, dist/) скрипт НЕ трогает: у части посетителей
+# вкладка открыта неделями, и эти файлы нужны, чтобы старые страницы
+# продолжали работать через совместимые роуты /messages.json и /getfile.php.
+# Убрать их отдельным заходом недели через две.
+
+set -euo pipefail
+
+APP=/home/faust_z/apps/randommusic
+DOCROOT=$(grep -E '^DOCROOT=' "$APP/.env" | cut -d= -f2-)
+APPLY=${1:-}
+
+# Файл : причина
+TARGETS=(
+  "chat.php:дубль чата; писал в тот же файл без ограничения длины — обход лимита"
+  "simple_html_dom.php:59 КБ, подключался в index.php, но ни разу не вызывался"
+  "paths.conf:2278 строк мёртвого индекса треков, заменён на tracks.sqlite"
+  "js/simple_html_dom.php:PHP-файл в каталоге JS, вторая копия того же"
+  "js/script_.js:чат через randommusic.myddns.me:8999, сервера давно нет"
+  "DEADJOE:аварийный дамп редактора joe"
+  "messages.json:чат переехал в SQLite; файл сохранён в бэкапе v1"
+)
+
+echo "Веб-корень: $DOCROOT"
+echo
+
+found=0
+for entry in "${TARGETS[@]}"; do
+  file="${entry%%:*}"
+  why="${entry#*:}"
+  path="$DOCROOT/$file"
+
+  if [ -e "$path" ]; then
+    size=$(du -h "$path" 2>/dev/null | cut -f1)
+    printf '  %-26s %6s  %s\n' "$file" "$size" "$why"
+    found=$((found + 1))
+  fi
+done
+
+if [ "$found" -eq 0 ]; then
+  echo "  Нечего удалять — уборка уже сделана."
+  exit 0
+fi
+
+echo
+if [ "$APPLY" != "--apply" ]; then
+  echo "Это предпросмотр. Для удаления: bin/cleanup-v1 --apply"
+  exit 0
+fi
+
+STAMP=$(date +%Y%m%d-%H%M%S)
+TRASH="/coldstorage/faust_z/backup/randommusic-cleanup-$STAMP"
+mkdir -p "$TRASH"
+
+for entry in "${TARGETS[@]}"; do
+  file="${entry%%:*}"
+  path="$DOCROOT/$file"
+  [ -e "$path" ] || continue
+  mkdir -p "$TRASH/$(dirname "$file")"
+  mv "$path" "$TRASH/$file"
+done
+
+echo "Удалено файлов: $found"
+echo "Копии на всякий случай: $TRASH"
+echo
+echo "Проверка сайта:"
+curl -s -o /dev/null -w "  главная:        HTTP %{http_code}\n" https://randommusic.insomnia247.nl/
+curl -s -o /dev/null -w "  /messages.json: HTTP %{http_code}\n" https://randommusic.insomnia247.nl/messages.json
+curl -s -o /dev/null -w "  /getfile.php:   HTTP %{http_code}\n" https://randommusic.insomnia247.nl/getfile.php
