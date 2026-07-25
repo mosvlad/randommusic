@@ -226,10 +226,6 @@ $canonical = $origin . $base . ($isPermalink && $initial ? '/t/' . $initial['id'
       <a href="https://t.me/randommusic_reborn" target="_blank" rel="noopener">Telegram Chat</a>
       <button type="button" class="theme-toggle" id="theme-toggle">День</button>
     </div>
-    <div>
-      <?= $e(number_format($stats['tracks'], 0, '.', ' ')) ?> треков ·
-      <?= (int) $stats['hours'] ?> часов музыки
-    </div>
   </footer>
 
 </div>

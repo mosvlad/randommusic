@@ -6,16 +6,15 @@
  * не нужны никому, а Range-запросы через Cache API работают плохо.
  */
 
-const VERSION = 'rm-v2.0.0';
+const VERSION = 'rm-v2.0.1';
 const SHELL = `${VERSION}-shell`;
 
+// Только то, что запрашивается без ?v=. CSS и JS сюда класть нельзя:
+// страница просит их с версией в адресе, и предзагруженная копия без
+// версии всё равно не совпадёт.
 const SHELL_FILES = [
   '/',
-  '/assets/css/app.css',
   '/assets/css/fonts.css',
-  '/assets/js/app.js',
-  '/assets/js/player.js',
-  '/assets/js/chat.js',
   '/assets/img/bg_night.jpg',
   '/assets/img/icon-192.png',
   '/assets/fonts/yanone-kaffeesatz-cyrillic.woff2',
@@ -64,10 +63,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Ассеты версионированы (?v=hash), поэтому кэш можно отдавать сразу
+  // Ассеты версионированы (?v=hash), поэтому кэш можно отдавать сразу.
+  //
+  // Сравнение строго по полному адресу, вместе со строкой запроса.
+  // С ignoreSearch кэш отвечал старым файлом на новый ?v=, то есть
+  // ровно отменял версионирование: страница приезжала свежая, а стили
+  // к ней — прошлые. Один раз это уже сломало вёрстку на проде.
   event.respondWith(
-    caches.match(request, { ignoreSearch: true }).then((cached) => {
-      const network = fetch(request)
+    caches.match(request).then((cached) => {
+      if (cached) return cached;
+
+      return fetch(request)
         .then((res) => {
           if (res.ok) {
             const copy = res.clone();
@@ -75,9 +81,7 @@ self.addEventListener('fetch', (event) => {
           }
           return res;
         })
-        .catch(() => cached);
-
-      return cached || network;
+        .catch(() => caches.match(request, { ignoreSearch: true }));
     })
   );
 });
