@@ -1,0 +1,22 @@
+# Disable directory browsing 
+Options -Indexes
+
+### Способ #1
+### Подсказать браузеру схему кеширования через заголовки в ответе сервера
+<ifModule mod_headers.c>
+    # 43200 - день, 604800 - неделя, 2592000 - месяц
+    <FilesMatch "\.(html|js|css)$">
+	Header set Cache-Control "max-age=2592000"
+        #Header unset Last-Modified
+    </FilesMatch>
+    <Files *.txt>
+	Header add Cache-Control "max-age=43200"
+    </Files>
+    <FilesMatch "\.(flv|swf|ico|gif|jpg|jpeg|png)$">
+	Header set Cache-Control "max-age=2592000"
+    </FilesMatch>
+    <FilesMatch "\.(pl|php|cgi|spl|scgi|fcgi)$">
+	# отключить кэширование
+	Header unset Cache-Control
+    </FilesMatch>
+</IfModule>

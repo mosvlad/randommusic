@@ -1,0 +1,26 @@
+# секреты
+.env
+
+# состояние приложения — не версионируется
+var/db/*.sqlite
+var/db/*.sqlite-wal
+var/db/*.sqlite-shm
+var/cache/*
+var/log/*
+!var/db/.gitkeep
+!var/cache/.gitkeep
+!var/log/.gitkeep
+
+# зависимости
+vendor/
+node_modules/
+
+# медиа
+*.mp3
+*.mp4
+
+# мусор
+DEADJOE
+.DS_Store
+*.swp
+*~
