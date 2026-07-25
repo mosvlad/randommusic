@@ -487,16 +487,30 @@ final class Scanner
         // изменился. Справа от «=» SQLite видит ещё старые значения строки,
         // так что сравнение работает. Иначе `bin/scan --full` стирал бы
         // тысячи замеров, каждый из которых стоит секунды работы ffmpeg.
+        //
+        // Имена :size_was/:mtime_was отдельные не для красоты: PDO не даёт
+        // переиспользовать один именованный параметр дважды в запросе.
         $stmt = $this->db->prepare(
             'UPDATE tracks SET hash = :hash, dup_key = :dup_key,
-                    loudness = CASE WHEN size <> :size OR mtime <> :mtime THEN NULL ELSE loudness END,
+                    loudness = CASE WHEN size <> :size_was OR mtime <> :mtime_was
+                                    THEN NULL ELSE loudness END,
                     size = :size, mtime = :mtime,
                     duration = :duration, bitrate = :bitrate, artist = :artist, title = :title,
                     album = :album, year = :year, genre = :genre, source = :source,
                     seen_at = :now, present = 1
              WHERE id = :id'
         );
-        $stmt->execute($this->bind($m) + ['now' => time(), 'id' => $id]);
+        // path в этом запросе не участвует — строка ищется по id.
+        // Лишний параметр PDO не прощает: SQLITE_RANGE.
+        $params = $this->bind($m);
+        unset($params['path']);
+
+        $stmt->execute($params + [
+            'now'       => time(),
+            'id'        => $id,
+            'size_was'  => $m['size'],
+            'mtime_was' => $m['mtime'],
+        ]);
     }
 
     /**
