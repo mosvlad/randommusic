@@ -24,3 +24,7 @@ DEADJOE
 .DS_Store
 *.swp
 *~
+
+# Переписка посетителей — в публичном репозитории ей не место
+legacy/v1/messages.json
+messages.json
