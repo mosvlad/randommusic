@@ -47,5 +47,14 @@ else
   rm -f "$TARGET/robots.txt" "$TARGET/sitemap.xml"   # теперь это роуты
 fi
 
+# Версия ассетов кэшируется в APCu; без сброса ?v= останется прежним,
+# а с Cache-Control: immutable правка не доедет до посетителя вовсе.
+php -r '
+define("APP_ROOT", "/home/faust_z/apps/randommusic");
+require APP_ROOT."/src/bootstrap.php";
+App\Support\Cache::flush();
+' 2>/dev/null || true
+curl -s -o /dev/null "https://randommusic.insomnia247.nl/api/v1/health" || true
+
 echo "==> Готово"
 find "$TARGET" -maxdepth 1 -mindepth 1 -printf '    %f\n' | sort

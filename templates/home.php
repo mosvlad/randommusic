@@ -112,16 +112,21 @@ $canonical = $origin . $base . ($isPermalink && $initial ? '/t/' . $initial['id'
       ?></span>
     </div>
 
+    <!-- Главное действие сайта — одна большая оранжевая кнопка, как в v1.
+         Всё остальное управление намеренно приглушено до второго плана. -->
     <div class="controls">
+      <button type="button" class="button button--random" id="btn-random">RANDOM</button>
+    </div>
+
+    <div class="controls-secondary">
       <button type="button" class="icon-btn" id="btn-prev" aria-label="Предыдущий" disabled>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
       </button>
 
-      <button type="button" class="icon-btn icon-btn--play" id="btn-play" data-state="paused" aria-label="Слушать">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+      <button type="button" class="icon-btn" id="btn-play" data-state="paused" aria-label="Слушать">
+        <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+        <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
       </button>
-
-      <button type="button" class="button button--random" id="btn-random">RANDOM</button>
 
       <button type="button" class="icon-btn" id="btn-next" aria-label="Следующий">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg>
@@ -129,7 +134,7 @@ $canonical = $origin . $base . ($isPermalink && $initial ? '/t/' . $initial['id'
 
       <label class="volume">
         <span class="visually-hidden">Громкость</span>
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
           <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/>
         </svg>
         <input type="range" id="volume" min="0" max="100" value="50">

@@ -420,20 +420,17 @@ final class Kernel
      */
     public static function assetVersion(): string
     {
-        $cached = Cache::get('asset.version');
-        if (is_string($cached)) {
-            return $cached;
-        }
-
+        // Считаем на каждый рендер, без кэша. Четыре stat() по горячим
+        // файлам стоят микросекунды, а кэш здесь однажды уже создал
+        // проблему: APCu веба и CLI — разная память, сброс после выкатки
+        // не срабатывал, и с Cache-Control: immutable правка CSS просто
+        // не доезжала до посетителя.
         $docroot = Config::docroot();
         $stamp = 0;
         foreach (['/assets/css/app.css', '/assets/js/app.js', '/assets/js/player.js', '/assets/js/chat.js'] as $f) {
             $stamp = max($stamp, (int) @filemtime($docroot . $f));
         }
 
-        $version = substr(md5(self::VERSION . '|' . $stamp), 0, 8);
-        Cache::set('asset.version', $version, 300);
-
-        return $version;
+        return substr(md5(self::VERSION . '|' . $stamp), 0, 8);
     }
 }
