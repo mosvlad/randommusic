@@ -388,17 +388,70 @@ final class Scanner
     private function clean(string $s): string
     {
         $s = str_replace(["\0", "\r", "\n", "\t"], ' ', $s);
-        // Битая кириллица в старых ID3v1 (cp1251, прочитанная как latin1)
+
         if ($s !== '' && !mb_check_encoding($s, 'UTF-8')) {
             $conv = @mb_convert_encoding($s, 'UTF-8', 'Windows-1251');
-            if (is_string($conv) && mb_check_encoding($conv, 'UTF-8')) {
-                $s = $conv;
-            } else {
-                $s = mb_convert_encoding($s, 'UTF-8', 'UTF-8');
-            }
+            $s = (is_string($conv) && mb_check_encoding($conv, 'UTF-8'))
+                ? $conv
+                : mb_convert_encoding($s, 'UTF-8', 'UTF-8');
         }
+
+        $s = self::repairCyrillic($s);
         $s = preg_replace('/\s+/u', ' ', $s) ?? $s;
+
         return mb_substr(trim($s), 0, 200);
+    }
+
+    /**
+     * Возврат кириллицы, испорченной при чтении ID3v1.
+     *
+     * В ID3v1 кодировка не указана, поэтому ffprobe разбирает такие теги
+     * как latin-1. Байты cp1251 превращаются в осмысленный UTF-8 из
+     * латиницы с диакритикой — «Çâåíèò ÿíâàðñêàÿ âüþãà» вместо «Звенит
+     * январская вьюга». Проверка mb_check_encoding такое не ловит:
+     * строка формально корректна.
+     *
+     * Чиним обратным ходом: разбираем строку на исходные байты и читаем
+     * их как cp1251. Результат принимаем, только если получилась
+     * преимущественно кириллица, — иначе пострадали бы настоящие
+     * латинские названия вроде Björk или Sigur Rós.
+     */
+    public static function repairCyrillic(string $s): string
+    {
+        if ($s === '' || !mb_check_encoding($s, 'UTF-8')) {
+            return $s;
+        }
+
+        // Признак подмены: несколько символов из Latin-1 Supplement
+        $suspicious = preg_match_all('/[\x{00C0}-\x{00FF}]/u', $s);
+        if ($suspicious < 2) {
+            return $s;
+        }
+
+        // Обратно в байты. Возможно только если все символы ≤ U+00FF
+        if (preg_match('/[^\x{0000}-\x{00FF}]/u', $s)) {
+            return $s;
+        }
+
+        $bytes = @mb_convert_encoding($s, 'ISO-8859-1', 'UTF-8');
+        if (!is_string($bytes) || $bytes === '') {
+            return $s;
+        }
+
+        $candidate = @mb_convert_encoding($bytes, 'UTF-8', 'Windows-1251');
+        if (!is_string($candidate) || !mb_check_encoding($candidate, 'UTF-8')) {
+            return $s;
+        }
+
+        $cyrillic = preg_match_all('/[\x{0400}-\x{04FF}]/u', $candidate);
+        $letters  = preg_match_all('/[\p{L}]/u', $candidate);
+
+        // Больше половины букв стали кириллицей — значит, угадали
+        if ($letters > 0 && $cyrillic / $letters >= 0.5) {
+            return $candidate;
+        }
+
+        return $s;
     }
 
     /** @param array<string,mixed> $m */
@@ -430,11 +483,17 @@ final class Scanner
     /** @param array<string,mixed> $m */
     private function update(int $id, array $m): void
     {
+        // loudness сбрасываем, только если файл на диске действительно
+        // изменился. Справа от «=» SQLite видит ещё старые значения строки,
+        // так что сравнение работает. Иначе `bin/scan --full` стирал бы
+        // тысячи замеров, каждый из которых стоит секунды работы ffmpeg.
         $stmt = $this->db->prepare(
-            'UPDATE tracks SET hash = :hash, dup_key = :dup_key, size = :size, mtime = :mtime,
+            'UPDATE tracks SET hash = :hash, dup_key = :dup_key,
+                    loudness = CASE WHEN size <> :size OR mtime <> :mtime THEN NULL ELSE loudness END,
+                    size = :size, mtime = :mtime,
                     duration = :duration, bitrate = :bitrate, artist = :artist, title = :title,
                     album = :album, year = :year, genre = :genre, source = :source,
-                    seen_at = :now, present = 1, loudness = NULL
+                    seen_at = :now, present = 1
              WHERE id = :id'
         );
         $stmt->execute($this->bind($m) + ['now' => time(), 'id' => $id]);
