@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+#
+# Бэкап баз и конфигурации. В v1 бэкапов не было вообще: единственной
+# копией чата был messages.json на проде.
+#
+#   bin/backup            обычный запуск (для таймера)
+#   bin/backup --verbose  с выводом
+
+set -euo pipefail
+
+APP=/home/faust_z/apps/randommusic
+DEST=/coldstorage/faust_z/backup/randommusic-db
+KEEP_DAYS=30
+STAMP=$(date +%Y%m%d-%H%M%S)
+VERBOSE=${1:-}
+
+mkdir -p "$DEST"
+
+say() { [ "$VERBOSE" = "--verbose" ] && echo "$@" || true; }
+
+# .backup у sqlite3 снимает согласованный снимок на живой базе,
+# не мешая ни читателям, ни писателям
+for db in chat tracks; do
+  src="$APP/var/db/$db.sqlite"
+  [ -f "$src" ] || continue
+  out="$DEST/$db-$STAMP.sqlite"
+  sqlite3 "$src" ".backup '$out'"
+  gzip -9 "$out"
+  say "  $db -> $(basename "$out").gz ($(du -h "$out.gz" | cut -f1))"
+done
+
+# Конфигурация с секретами — отдельно и без доступа для группы
+install -m 600 "$APP/.env" "$DEST/env-$STAMP.bak"
+
+# Чистка старых
+find "$DEST" -maxdepth 1 -type f \( -name '*.sqlite.gz' -o -name 'env-*.bak' \) \
+     -mtime +$KEEP_DAYS -delete
+
+say "Готово. Всего копий: $(find "$DEST" -maxdepth 1 -name '*.sqlite.gz' | wc -l)"

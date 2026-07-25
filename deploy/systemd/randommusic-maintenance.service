@@ -1,0 +1,9 @@
+[Unit]
+Description=RandomMusic: обслуживание баз и бэкап
+
+[Service]
+Type=oneshot
+Nice=10
+WorkingDirectory=/home/faust_z/apps/randommusic
+ExecStart=/usr/bin/php /home/faust_z/apps/randommusic/bin/maintenance --quiet
+ExecStart=/home/faust_z/apps/randommusic/bin/backup

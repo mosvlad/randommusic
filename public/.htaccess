@@ -1,0 +1,90 @@
+# RandomMusic 2.0
+
+Options -Indexes
+DirectoryIndex index.php
+
+# --------------------------------------------------------------------------
+# Роутинг: всё, что не существует на диске, уходит во фронт-контроллер.
+# Медиафайлы (1000/, music/, upload/) и ассеты Apache отдаёт сам —
+# так сохраняются Range-запросы и перемотка.
+# --------------------------------------------------------------------------
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Совместимость: старые вкладки ещё стучатся по этим адресам
+    RewriteRule ^messages\.json$ index.php [L,QSA]
+    RewriteRule ^getfile\.php$   index.php [L,QSA]
+
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.php [L,QSA]
+</IfModule>
+
+# --------------------------------------------------------------------------
+# Сжатие. Модули deflate и brotli на сервере загружены, но для этого
+# vhost не были включены: CSS, JS и JSON ехали в открытом виде.
+# --------------------------------------------------------------------------
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css
+    AddOutputFilterByType DEFLATE application/javascript application/x-javascript
+    AddOutputFilterByType DEFLATE application/json application/xml
+    AddOutputFilterByType DEFLATE image/svg+xml application/manifest+json
+</IfModule>
+
+<IfModule mod_brotli.c>
+    AddOutputFilterByType BROTLI_COMPRESS text/html text/plain text/xml text/css
+    AddOutputFilterByType BROTLI_COMPRESS application/javascript application/json
+    AddOutputFilterByType BROTLI_COMPRESS image/svg+xml application/manifest+json
+</IfModule>
+
+# --------------------------------------------------------------------------
+# Кэширование. Ассеты версионируются (?v=hash), поэтому им можно год.
+# В v1 на CSS и JS стоял месяц без версий: правка доходила до посетителя
+# через месяц или после ручного сброса кэша.
+# --------------------------------------------------------------------------
+<IfModule mod_headers.c>
+    <FilesMatch "\.(css|js|woff2|svg)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+
+    <FilesMatch "\.(jpg|jpeg|png|gif|ico|webp|avif)$">
+        Header set Cache-Control "public, max-age=2592000"
+    </FilesMatch>
+
+    <FilesMatch "\.(mp3|ogg|opus|m4a|flac)$">
+        Header set Cache-Control "public, max-age=604800"
+        Header set Accept-Ranges "bytes"
+    </FilesMatch>
+
+    <FilesMatch "\.php$">
+        Header unset Cache-Control
+    </FilesMatch>
+
+    # Безопасность
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Permissions-Policy "geolocation=(), camera=(), microphone=(), interest-cohort=()"
+
+    # Весь JS вынесен в файлы, поэтому unsafe-inline для скриптов не нужен.
+    # Инлайновый <style> остался только в админке, отсюда style-src.
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; media-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'self'; base-uri 'self'; object-src 'none'"
+</IfModule>
+
+# --------------------------------------------------------------------------
+# Правильные типы для того, что Apache мог бы не узнать
+# --------------------------------------------------------------------------
+<IfModule mod_mime.c>
+    AddType application/manifest+json .webmanifest
+    AddType font/woff2 .woff2
+    AddType audio/mpeg .mp3
+    AddType audio/ogg  .ogg .oga
+    AddType audio/opus .opus
+</IfModule>
+
+# --------------------------------------------------------------------------
+# Ничего лишнего наружу
+# --------------------------------------------------------------------------
+<FilesMatch "^(\.env.*|\.git.*|\.htaccess|composer\.(json|lock))$">
+    Require all denied
+</FilesMatch>

@@ -1,0 +1,45 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+/**
+ * Периодическое обслуживание: чистка служебных таблиц, пересчёт весов
+ * ротации, VACUUM. Запускается таймером раз в сутки.
+ */
+
+require __DIR__ . '/../src/bootstrap.php';
+
+use App\Chat\Repository as ChatRepo;
+use App\Support\Cache;
+use App\Support\Db;
+use App\Track\Stats;
+
+$quiet = in_array('--quiet', array_slice($argv, 1), true);
+$say = static function (string $m) use ($quiet): void {
+    if (!$quiet) {
+        echo $m, "\n";
+    }
+};
+
+// Присутствие, окна антифлуда, истёкшие баны
+(new ChatRepo())->prune();
+$say('Служебные таблицы чата подчищены');
+
+// Веса ротации по доле ранних скипов
+$updated = (new Stats())->recomputeWeights();
+$say("Веса пересчитаны для треков: $updated");
+
+// Статистика прослушиваний за пределами полугода уже ни на что не влияет
+$tracks = Db::get('tracks');
+$tracks->prepare('DELETE FROM plays WHERE ts < ?')->execute([time() - 180 * 86400]);
+$say('Старая статистика прослушиваний удалена');
+
+// WAL растёт, если его не подрезать
+foreach (['tracks', 'chat'] as $name) {
+    Db::get($name)->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    Db::get($name)->exec('PRAGMA optimize');
+}
+$say('WAL подрезан, статистика индексов обновлена');
+
+Cache::flush();
+$say('Кэш сброшен');

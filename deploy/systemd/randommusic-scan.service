@@ -1,0 +1,10 @@
+[Unit]
+Description=RandomMusic: обход медиатеки и обновление индекса
+After=network.target
+
+[Service]
+Type=oneshot
+Nice=10
+IOSchedulingClass=idle
+WorkingDirectory=/home/faust_z/apps/randommusic
+ExecStart=/usr/bin/php /home/faust_z/apps/randommusic/bin/scan --quiet

@@ -1,0 +1,11 @@
+[Unit]
+Description=RandomMusic: ежедневное обслуживание и бэкап
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+RandomizedDelaySec=20min
+AccuracySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

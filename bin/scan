@@ -1,0 +1,63 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+/**
+ * Обход медиатеки и обновление индекса.
+ *
+ *   bin/scan            инкрементально (по size+mtime) — секунды
+ *   bin/scan --full     перечитать всё заново, включая теги
+ *   bin/scan --quiet    без прогресса, для таймера
+ */
+
+require __DIR__ . '/../src/bootstrap.php';
+
+use App\Support\Db;
+use App\Track\Scanner;
+
+$opts  = array_slice($argv, 1);
+$full  = in_array('--full', $opts, true);
+$quiet = in_array('--quiet', $opts, true);
+
+Db::migrate('tracks');
+
+$t0 = microtime(true);
+$log = static function (string $msg) use ($quiet): void {
+    if (!$quiet) {
+        echo $msg, "\n";
+    }
+};
+
+$log($full ? 'Полное сканирование медиатеки...' : 'Инкрементальное сканирование...');
+
+$scanner = new Scanner($log);
+
+try {
+    $stats = $scanner->run($full);
+} catch (Throwable $e) {
+    fwrite(STDERR, 'Сканирование упало: ' . $e->getMessage() . "\n");
+    exit(1);
+}
+
+$soft = $scanner->softDuplicateCount();
+$secs = round(microtime(true) - $t0, 1);
+
+$summary = sprintf(
+    "Готово за %s с: просмотрено %d, добавлено %d, обновлено %d, без изменений %d, "
+    . "пропало %d, ошибок %d, байтовых дублей %d",
+    $secs, $stats['scanned'], $stats['added'], $stats['updated'],
+    $stats['unchanged'], $stats['removed'], $stats['failed'], $stats['duplicates']
+);
+
+if ($quiet) {
+    // В таймере пишем только если что-то изменилось
+    if ($stats['added'] || $stats['updated'] || $stats['removed'] || $stats['failed']) {
+        echo $summary, "\n";
+    }
+} else {
+    echo $summary, "\n";
+    if ($soft > 0) {
+        echo "Возможных дублей по «артист+название+длительность»: $soft "
+           . "(в ротации оставлены, автоматически не трогаем)\n";
+    }
+}

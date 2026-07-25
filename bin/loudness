@@ -1,0 +1,124 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+/**
+ * Замер громкости (EBU R128) для выравнивания уровня между треками.
+ *
+ * В случайной подборке соседние треки различаются на десяток децибел —
+ * это самая заметная бытовая проблема сайта. Плеер применяет поправку
+ * через WebAudio GainNode, ничего не перекодируя.
+ *
+ * Замер требует полного декодирования, поэтому идёт партиями по таймеру,
+ * а не в момент сканирования.
+ *
+ *   bin/loudness            одна партия (по умолчанию 60 треков)
+ *   bin/loudness --limit=N  размер партии
+ *   bin/loudness --all      пока не кончатся незамеренные
+ */
+
+require __DIR__ . '/../src/bootstrap.php';
+
+use App\Support\Cache;
+use App\Support\Config;
+use App\Support\Db;
+
+$limit = 60;
+$all   = false;
+$quiet = false;
+
+foreach (array_slice($argv, 1) as $arg) {
+    if (preg_match('/^--limit=(\d+)$/', $arg, $m)) {
+        $limit = max(1, (int) $m[1]);
+    } elseif ($arg === '--all') {
+        $all = true;
+    } elseif ($arg === '--quiet') {
+        $quiet = true;
+    }
+}
+
+$db      = Db::get('tracks');
+$docroot = Config::docroot();
+$ffmpeg  = (string) Config::get('FFMPEG', '/usr/bin/ffmpeg');
+
+$select = $db->prepare(
+    'SELECT id, path FROM tracks
+     WHERE loudness IS NULL AND active = 1
+     ORDER BY id LIMIT ?'
+);
+$update = $db->prepare('UPDATE tracks SET loudness = ? WHERE id = ?');
+
+$done = 0;
+$failed = 0;
+$t0 = microtime(true);
+
+do {
+    $select->execute([$limit]);
+    $rows = $select->fetchAll();
+
+    if ($rows === []) {
+        break;
+    }
+
+    foreach ($rows as $row) {
+        $file = $docroot . $row['path'];
+        $lufs = measure($ffmpeg, $file);
+
+        if ($lufs === null) {
+            // Чтобы не перебирать один и тот же битый файл каждый запуск,
+            // помечаем нейтральным значением
+            $update->execute([-14.0, (int) $row['id']]);
+            $failed++;
+            continue;
+        }
+
+        $update->execute([$lufs, (int) $row['id']]);
+        $done++;
+    }
+} while ($all);
+
+Cache::flush();
+
+$left = (int) $db->query('SELECT COUNT(*) FROM tracks WHERE loudness IS NULL AND active = 1')->fetchColumn();
+
+if (!$quiet || $done > 0) {
+    printf(
+        "Замерено: %d, не удалось: %d, осталось: %d (%.1f с)\n",
+        $done, $failed, $left, microtime(true) - $t0
+    );
+}
+
+/**
+ * Интегрированная громкость в LUFS.
+ *
+ * Анализируем не более трёх минут: на полном декодировании 3800 треков
+ * ушло бы больше суток, а для выравнивания уровня разницы почти нет.
+ */
+function measure(string $ffmpeg, string $file): ?float
+{
+    if (!is_readable($file)) {
+        return null;
+    }
+
+    $cmd = sprintf(
+        '%s -nostdin -hide_banner -t 180 -i %s -map a:0 -filter:a ebur128 -f null - 2>&1',
+        escapeshellcmd($ffmpeg),
+        escapeshellarg($file)
+    );
+
+    $out = @shell_exec($cmd);
+    if (!is_string($out)) {
+        return null;
+    }
+
+    // Итоговая сводка идёт в конце вывода:
+    //   Integrated loudness:
+    //     I:         -9.7 LUFS
+    if (preg_match_all('/^\s*I:\s*(-?\d+(?:\.\d+)?)\s*LUFS/mi', $out, $m) && $m[1] !== []) {
+        $value = (float) end($m[1]);
+        // -70 LUFS — «тишина», такое значение бесполезно
+        return $value > -60.0 ? round($value, 2) : null;
+    }
+
+    return null;
+}

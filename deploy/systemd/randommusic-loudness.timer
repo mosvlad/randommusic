@@ -1,0 +1,11 @@
+[Unit]
+Description=RandomMusic: догонять замер громкости
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=30min
+AccuracySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

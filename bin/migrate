@@ -1,0 +1,18 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+require __DIR__ . '/../src/bootstrap.php';
+
+use App\Support\Db;
+
+foreach (['tracks', 'chat'] as $name) {
+    $applied = Db::migrate($name);
+    if ($applied === []) {
+        echo "$name: актуальна\n";
+    } else {
+        foreach ($applied as $v) {
+            echo "$name: применена $v\n";
+        }
+    }
+}

@@ -1,0 +1,10 @@
+[Unit]
+Description=RandomMusic: замер громкости новых треков
+
+[Service]
+Type=oneshot
+Nice=15
+IOSchedulingClass=idle
+CPUQuota=50%
+WorkingDirectory=/home/faust_z/apps/randommusic
+ExecStart=/usr/bin/php /home/faust_z/apps/randommusic/bin/loudness --limit=120 --quiet

@@ -1,0 +1,624 @@
+@import url("fonts.css");
+
+/* ==========================================================================
+   RandomMusic 2.0
+
+   Облик v1 сохранён намеренно: тёмный фотофон, оранжевый #f4511e,
+   Yanone Kaffeesatz, узкая центральная колонка. Изменилась только
+   реализация — палитра вынесена в переменные, вёрстка стала текучей,
+   а ~40 блоков подгонки ширины <audio> под каждый браузер исчезли
+   вместе с нативным плеером, ради которого существовали.
+   ========================================================================== */
+
+:root {
+  --accent:        #f4511e;
+  --accent-hover:  #ff6a3c;
+  --accent-dim:    rgba(244, 81, 30, 0.22);
+
+  --bg:            rgb(25, 25, 25);
+  --bg-image:      url("../img/bg_night.jpg");
+
+  --panel:         rgba(255, 255, 255, 0.6);
+  --panel-solid:   #fafafa;
+  --panel-text:    #3a3a3a;
+  --panel-dim:     #6e6e6e;
+
+  --text:          #c8c7c8;
+  --text-strong:   #eeeeee;
+  --text-dim:      #808080;
+  --heading:       #767676;
+
+  --border:        rgba(255, 255, 255, 0.14);
+  --radius:        4px;
+  --radius-lg:     8px;
+
+  --font:          "Yanone Kaffeesatz", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono:     ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --shadow:        0 2px 18px rgba(0, 0, 0, 0.45);
+  --speed:         0.25s;
+
+  --col:           clamp(300px, 92vw, 700px);
+}
+
+/* Дневная тема — тумблер в v1 был свёрстан, но закомментирован */
+:root[data-theme="day"] {
+  --bg-image:    url("../img/bg_day.jpg");
+  --text:        #d8d8d8;
+  --text-strong: #ffffff;
+  --heading:     #8a8a8a;
+}
+
+/* --------------------------------------------------------------------------
+   База
+   -------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  padding: 2rem 1rem 3rem;
+
+  background-color: var(--bg);
+  background-image: var(--bg-image);
+  background-position: center center;
+  background-size: cover;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+
+  color: var(--text);
+  font: 300 20px/1.3 var(--font);
+  transition: background-image var(--speed) ease;
+}
+
+h1, h2, h3, h4, h5, h6, p, ul, ol, figure { margin: 0; }
+ul, ol { padding: 0; list-style: none; }
+
+a { color: #ddd; text-decoration: underline; text-underline-offset: 2px; }
+a:hover, a:focus-visible { color: var(--accent-hover); }
+
+::selection { background-color: var(--accent); color: #fff; }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+   Раскладка
+   -------------------------------------------------------------------------- */
+
+.container {
+  width: var(--col);
+  margin: 0 auto;
+  display: grid;
+  gap: 1.75rem;
+}
+
+.site-head { text-align: center; }
+
+.site-title {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: clamp(2.5rem, 9vw, 3.75rem);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+}
+
+.site-intro {
+  margin-top: 0.85rem;
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-strong);
+  font-size: 1.05rem;
+  line-height: 1.45;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
+}
+
+.site-intro p + p { margin-top: 0.35rem; }
+.site-intro .accent { color: var(--accent); }
+
+.section-title {
+  text-align: center;
+  color: var(--text-strong);
+  font-size: clamp(1.8rem, 6vw, 2.5rem);
+  font-weight: 400;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+}
+
+/* --------------------------------------------------------------------------
+   Плеер
+   В v1 это был нативный <audio controls>, из-за которого в CSS жили
+   десятки правил html[data-useragent*="MSIE 9.0"] и подобных.
+   -------------------------------------------------------------------------- */
+
+.player {
+  background: var(--panel);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 1.25rem 1.25rem 1rem;
+  color: var(--panel-text);
+}
+
+.now-playing {
+  text-align: center;
+  min-height: 3.4rem;
+  display: grid;
+  align-content: center;
+  gap: 0.15rem;
+}
+
+.now-playing__title {
+  font-size: clamp(1.35rem, 4.5vw, 1.9rem);
+  font-weight: 400;
+  line-height: 1.15;
+  color: #2b2b2b;
+  overflow-wrap: anywhere;
+}
+
+.now-playing__artist {
+  font-size: clamp(1rem, 3.2vw, 1.25rem);
+  color: var(--panel-dim);
+  overflow-wrap: anywhere;
+}
+
+.now-playing__meta {
+  font-size: 0.85rem;
+  color: var(--panel-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.player.is-loading .now-playing__title { opacity: 0.45; }
+
+/* Полоса прогресса */
+.progress {
+  --played: 0%;
+  position: relative;
+  margin: 0.9rem 0 0.35rem;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.progress__track {
+  position: relative;
+  width: 100%;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.16);
+  overflow: hidden;
+}
+
+.progress__buffer {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0%;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.progress__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--played);
+  background: var(--accent);
+  transition: width 0.12s linear;
+}
+
+.progress__thumb {
+  position: absolute;
+  top: 50%;
+  left: var(--played);
+  width: 13px; height: 13px;
+  margin-left: -6.5px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translateY(-50%) scale(0);
+  transition: transform var(--speed) ease;
+  pointer-events: none;
+}
+
+.progress:hover .progress__thumb,
+.progress:focus-visible .progress__thumb,
+.progress.is-scrubbing .progress__thumb { transform: translateY(-50%) scale(1); }
+
+.times {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--panel-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Кнопки управления */
+.controls {
+  margin-top: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 44px; height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.06);
+  color: #4a4a4a;
+  cursor: pointer;
+  transition: background var(--speed), color var(--speed), transform var(--speed);
+}
+
+.icon-btn:hover:not(:disabled) { background: var(--accent-dim); color: #222; }
+.icon-btn:active:not(:disabled) { transform: scale(0.94); }
+.icon-btn:disabled { opacity: 0.35; cursor: default; }
+.icon-btn svg { width: 20px; height: 20px; fill: currentColor; }
+
+.icon-btn--play {
+  width: 54px; height: 54px;
+  background: var(--accent);
+  color: #fff;
+}
+.icon-btn--play:hover:not(:disabled) { background: var(--accent-hover); color: #fff; }
+.icon-btn--play svg { width: 24px; height: 24px; }
+
+.button {
+  border: none;
+  border-radius: var(--radius);
+  background-color: var(--accent);
+  color: #fff;
+  font-family: var(--font);
+  font-size: 1.25rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  padding: 0.6rem 1.5rem;
+  cursor: pointer;
+  transition: background var(--speed), transform var(--speed);
+}
+
+.button:hover { background: var(--accent-hover); }
+.button:active { transform: scale(0.97); }
+
+.button--random {
+  min-width: 9.5rem;
+  font-size: 1.35rem;
+}
+
+.player.is-loading .button--random { opacity: 0.7; }
+
+/* Громкость */
+.volume {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 7.5rem;
+}
+
+.volume input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+}
+
+.volume input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px; height: 13px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+.volume input[type="range"]::-moz-range-thumb {
+  width: 13px; height: 13px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+/* Панель под плеером */
+.player-extra {
+  margin-top: 0.85rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+  color: var(--panel-dim);
+}
+
+.player-extra a { color: var(--panel-dim); }
+.player-extra a:hover { color: var(--accent); }
+
+/* История — спойлер, как в v1 */
+.spoiler-toggle {
+  display: block;
+  width: 100%;
+  margin-top: 0.6rem;
+  border: none;
+  border-radius: 2px;
+  background-color: var(--accent);
+  color: #fff;
+  font-family: var(--font);
+  font-size: 0.95rem;
+  padding: 0.4rem;
+  cursor: pointer;
+  transition: background var(--speed);
+}
+
+.spoiler-toggle:hover { background: var(--accent-hover); }
+
+.history {
+  overflow: hidden;
+  max-height: 0;
+  background: rgba(245, 245, 245, 0.92);
+  border-radius: 0 0 var(--radius) var(--radius);
+  transition: max-height 0.4s ease;
+}
+
+.history[data-open="1"] { max-height: 240px; overflow-y: auto; }
+
+.history__list { padding: 0.35rem; }
+
+.history__item {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: none;
+  border-radius: 2px;
+  background: none;
+  color: #444;
+  font-family: var(--font);
+  font-size: 0.95rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--speed);
+}
+
+.history__item:hover { background: var(--accent-dim); }
+.history__item[aria-current="true"] { color: var(--accent); }
+.history__num { color: #999; font-variant-numeric: tabular-nums; min-width: 1.6rem; }
+
+/* --------------------------------------------------------------------------
+   Чат
+   -------------------------------------------------------------------------- */
+
+.chat { display: grid; gap: 0.6rem; }
+
+.chat__log {
+  height: clamp(15rem, 42vh, 22rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: rgba(250, 250, 250, 0.9);
+  box-shadow: var(--shadow);
+  scrollbar-width: thin;
+}
+
+.msg {
+  padding: 0.3rem 0;
+  animation: msg-in 0.22s ease both;
+}
+
+.msg + .msg { border-top: 1px solid rgba(0, 0, 0, 0.05); }
+
+.msg__head {
+  display: flex;
+  gap: 0.45rem;
+  align-items: baseline;
+  font-size: 0.8rem;
+  color: var(--panel-dim);
+}
+
+.msg__name { font-weight: 700; color: var(--msg-color, #555); overflow-wrap: anywhere; }
+.msg__time { font-variant-numeric: tabular-nums; }
+.msg__src {
+  font-size: 0.72rem;
+  padding: 0 0.28rem;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.07);
+}
+
+.msg__body {
+  color: #333;
+  font-size: 1.05rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.msg--pending { opacity: 0.5; }
+.msg__body a { color: var(--accent); }
+
+@keyframes msg-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.chat__form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+}
+
+.chat__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(6rem, 11rem);
+  gap: 0.5rem;
+}
+
+.field {
+  width: 100%;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.92);
+  color: #333;
+  font-family: var(--font);
+  font-size: 1.05rem;
+}
+
+.field::placeholder { color: #999; }
+.field:focus { border-color: var(--accent); }
+
+/* Ловушка для ботов: поле есть в разметке, но человек его не видит */
+.hp {
+  position: absolute !important;
+  left: -9999px !important;
+  width: 1px; height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chat__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+.chat__status { min-height: 1.2em; }
+.chat__status[data-kind="error"] { color: var(--accent); }
+
+.online-dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  margin-right: 0.35rem;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: middle;
+}
+
+.chat__more {
+  align-self: center;
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  font-family: var(--font);
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.chat__more:hover { color: var(--accent); }
+
+/* --------------------------------------------------------------------------
+   Подвал
+   -------------------------------------------------------------------------- */
+
+.site-foot {
+  text-align: center;
+  display: grid;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+.site-foot__links {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.theme-toggle {
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  font-family: var(--font);
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.theme-toggle:hover { color: var(--accent); }
+
+/* --------------------------------------------------------------------------
+   Мелочи
+   -------------------------------------------------------------------------- */
+
+.noscript-player {
+  display: block;
+  width: 100%;
+  margin-top: 0.75rem;
+}
+
+.error-page {
+  display: grid;
+  place-items: center;
+  gap: 1rem;
+  min-height: 60vh;
+  text-align: center;
+}
+
+.error-page__code {
+  font-size: clamp(4rem, 20vw, 8rem);
+  line-height: 1;
+  color: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  body { background-attachment: scroll; }
+}
+
+/* Телефоны: фон fixed на мобильных тормозит и прыгает при скролле */
+@media (max-width: 640px) {
+  body { background-attachment: scroll; padding-top: 1.25rem; }
+  .container { gap: 1.25rem; }
+  .chat__row { grid-template-columns: 1fr; }
+  .chat__form { grid-template-columns: 1fr; }
+}

@@ -1,0 +1,69 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+/**
+ * Перенос чата из messages.json (v1) в chat.sqlite.
+ *
+ * Идентификаторы сохраняются: нумерация в v1 дошла до 5832, продолжаем
+ * с неё, чтобы у открытых старых вкладок не поехала лента.
+ *
+ *   bin/import-legacy [путь/к/messages.json]
+ */
+
+require __DIR__ . '/../src/bootstrap.php';
+
+use App\Support\Config;
+use App\Support\Db;
+
+$file = $argv[1] ?? (Config::docroot() . '/messages.json');
+
+if (!is_readable($file)) {
+    fwrite(STDERR, "Не читается: $file\n");
+    exit(1);
+}
+
+$raw = file_get_contents($file);
+$data = json_decode((string) $raw, true);
+
+if (!is_array($data)) {
+    fwrite(STDERR, "Не разобрался JSON: $file\n");
+    exit(1);
+}
+
+Db::migrate('chat');
+$db = Db::get('chat');
+
+$insert = $db->prepare(
+    'INSERT OR IGNORE INTO messages (id, ts, name, content, client, source)
+     VALUES (:id, :ts, :name, :content, :client, :source)'
+);
+
+$imported = 0;
+$skipped  = 0;
+
+$db->exec('BEGIN');
+foreach ($data as $m) {
+    if (!is_array($m) || !isset($m['id'], $m['time'], $m['name'], $m['content'])) {
+        $skipped++;
+        continue;
+    }
+
+    $insert->execute([
+        'id'      => (int) $m['id'],
+        'ts'      => (int) $m['time'],
+        'name'    => mb_substr((string) $m['name'], 0, 64),
+        'content' => mb_substr((string) $m['content'], 0, 1024),
+        'client'  => '',            // происхождение старых сообщений неизвестно
+        'source'  => 'v1',
+    ]);
+
+    $imported += $insert->rowCount();
+}
+$db->exec('COMMIT');
+
+$total = (int) $db->query('SELECT COUNT(*) FROM messages')->fetchColumn();
+$max   = (int) $db->query('SELECT COALESCE(MAX(id), 0) FROM messages')->fetchColumn();
+
+echo "Импортировано: $imported, пропущено: $skipped\n";
+echo "Всего в чате: $total, последний id: $max\n";

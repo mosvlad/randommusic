@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+#
+# Выкатка публичной части в веб-корень.
+#
+#   bin/deploy staging   → в подкаталог /v2 сайта, прод не трогается
+#   bin/deploy prod      → в корень сайта (перед этим снимается бэкап)
+#
+# Код приложения живёт вне docroot и не копируется — в вебе оказываются
+# только ассеты, index.php и .htaccess.
+
+set -euo pipefail
+
+APP=/home/faust_z/apps/randommusic
+DOCROOT=$(grep -E '^DOCROOT=' "$APP/.env" | cut -d= -f2-)
+TARGET_MODE=${1:-staging}
+
+case "$TARGET_MODE" in
+  staging) TARGET="$DOCROOT/v2" ;;
+  prod)    TARGET="$DOCROOT" ;;
+  *) echo "Использование: bin/deploy [staging|prod]" >&2; exit 1 ;;
+esac
+
+echo "==> Цель: $TARGET"
+mkdir -p "$TARGET"
+
+if [ "$TARGET_MODE" = "prod" ]; then
+  STAMP=$(date +%Y%m%d-%H%M%S)
+  BK="/coldstorage/faust_z/backup/randommusic-predeploy-$STAMP.tar.gz"
+  echo "==> Бэкап текущего docroot: $BK"
+  tar -czf "$BK" -C "$(dirname "$DOCROOT")" "$(basename "$DOCROOT")"
+fi
+
+echo "==> Копирую публичные файлы"
+rsync -a --delete \
+  --exclude='.gitkeep' \
+  "$APP/public/assets/" "$TARGET/assets/"
+
+cp "$APP/public/index.php"           "$TARGET/index.php"
+cp "$APP/public/.htaccess"           "$TARGET/.htaccess"
+cp "$APP/public/manifest.webmanifest" "$TARGET/manifest.webmanifest" 2>/dev/null || true
+cp "$APP/public/sw.js"               "$TARGET/sw.js"               2>/dev/null || true
+
+# На обкатке закрываем от поисковиков файлом: он перекрывает динамический роут
+if [ "$TARGET_MODE" = "staging" ]; then
+  printf 'User-agent: *\nDisallow: /\n' > "$TARGET/robots.txt"
+else
+  rm -f "$TARGET/robots.txt" "$TARGET/sitemap.xml"   # теперь это роуты
+fi
+
+echo "==> Готово"
+find "$TARGET" -maxdepth 1 -mindepth 1 -printf '    %f\n' | sort
