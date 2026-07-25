@@ -422,36 +422,93 @@ final class Scanner
             return $s;
         }
 
-        // Признак подмены: несколько символов из Latin-1 Supplement
-        $suspicious = preg_match_all('/[\x{00C0}-\x{00FF}]/u', $s);
-        if ($suspicious < 2) {
+        // Байты cp1251 0xC0–0xFF (все буквы) и 0xA8/0xB8 (Ё/ё), прочитанные
+        // как latin-1, дают ровно эти символы.
+        $suspect = '[\x{00A8}\x{00B8}\x{00C0}-\x{00FF}]';
+
+        // Решающий признак — сцепка: кириллица мозаичит целыми словами,
+        // каждая буква даёт один высокий байт. У настоящей латиницы
+        // диакритика встречается одиночными вкраплениями, так что Björk
+        // и Sigur Rós сюда не попадают.
+        if (!preg_match('/' . $suspect . '{3,}/u', $s)) {
             return $s;
         }
 
-        // Обратно в байты. Возможно только если все символы ≤ U+00FF
-        if (preg_match('/[^\x{0000}-\x{00FF}]/u', $s)) {
+        // Работаем посегментно, а не строкой целиком: тег может смешивать
+        // испорченную кириллицу с латиницей, типографскими кавычками и
+        // прочим за пределами Latin-1 — при проверке целиком такая строка
+        // отвергалась бы вся.
+
+        // Шаг 1. Подтверждаем, что это действительно перекодировка: хотя бы
+        // одно длинное слово должно превратиться в осмысленную кириллицу.
+        $confirmed = false;
+        preg_match_all('/' . $suspect . '{3,}/u', $s, $runs);
+
+        foreach ($runs[0] as $run) {
+            $word = self::toCp1251($run);
+            if ($word !== null && self::looksLikeWord($word)) {
+                $confirmed = true;
+                break;
+            }
+        }
+
+        if (!$confirmed) {
             return $s;
         }
 
-        $bytes = @mb_convert_encoding($s, 'ISO-8859-1', 'UTF-8');
+        // Шаг 2. Строка признана испорченной — чиним все её куски, включая
+        // короткие. Иначе от «Ìû íå ðàáû» осталось бы «Ìû íå рабы».
+        $out = preg_replace_callback(
+            '/' . $suspect . '+/u',
+            static function (array $m): string {
+                $word = self::toCp1251($m[0]);
+                if ($word === null) {
+                    return $m[0];
+                }
+                // Длинные куски всё же проверяем: в одной строке может
+                // соседствовать и настоящая латиница с диакритикой
+                if (mb_strlen($m[0]) >= 3 && !self::looksLikeWord($word)) {
+                    return $m[0];
+                }
+                return $word;
+            },
+            $s
+        );
+
+        return is_string($out) ? $out : $s;
+    }
+
+    /** Символы Latin-1 обратно в байты и оттуда в cp1251. */
+    private static function toCp1251(string $run): ?string
+    {
+        $bytes = @mb_convert_encoding($run, 'ISO-8859-1', 'UTF-8');
         if (!is_string($bytes) || $bytes === '') {
-            return $s;
+            return null;
         }
 
-        $candidate = @mb_convert_encoding($bytes, 'UTF-8', 'Windows-1251');
-        if (!is_string($candidate) || !mb_check_encoding($candidate, 'UTF-8')) {
-            return $s;
+        $out = @mb_convert_encoding($bytes, 'UTF-8', 'Windows-1251');
+
+        return (is_string($out) && mb_check_encoding($out, 'UTF-8')) ? $out : null;
+    }
+
+    /**
+     * Похоже на слово, а не на случайный набор.
+     *
+     * Отсеивает теги в других легаси-кодировках (EUC-KR, Shift-JIS): высокие
+     * байты у них тоже есть, но при чтении как cp1251 выходит «йЗц» — смесь
+     * регистров посреди слова, которой в тексте не бывает.
+     */
+    private static function looksLikeWord(string $word): bool
+    {
+        if (preg_match_all('/[\x{0400}-\x{04FF}]/u', $word) < 3) {
+            return false;
         }
 
-        $cyrillic = preg_match_all('/[\x{0400}-\x{04FF}]/u', $candidate);
-        $letters  = preg_match_all('/[\p{L}]/u', $candidate);
+        $upper = mb_strtoupper($word);
+        $lower = mb_strtolower($word);
+        $title = mb_substr($upper, 0, 1) . mb_substr($lower, 1);
 
-        // Больше половины букв стали кириллицей — значит, угадали
-        if ($letters > 0 && $cyrillic / $letters >= 0.5) {
-            return $candidate;
-        }
-
-        return $s;
+        return $word === $upper || $word === $lower || $word === $title;
     }
 
     /** @param array<string,mixed> $m */

@@ -1,0 +1,104 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+/**
+ * Восстановление кириллицы в уже проиндексированных тегах.
+ *
+ * Делает то же, что сканер, но по базе — без повторного обхода медиатеки
+ * и без пересчёта громкости.
+ *
+ *   bin/fix-encoding            показать, что изменится
+ *   bin/fix-encoding --apply    записать
+ */
+
+require __DIR__ . '/../src/bootstrap.php';
+
+use App\Support\Cache;
+use App\Support\Db;
+use App\Track\Scanner;
+
+$apply = in_array('--apply', array_slice($argv, 1), true);
+
+$db = Db::get('tracks');
+$rows = $db->query('SELECT id, artist, title, album, genre, duration FROM tracks')->fetchAll();
+
+$fields = ['artist', 'title', 'album', 'genre'];
+$changes = [];
+
+foreach ($rows as $row) {
+    $patch = [];
+
+    foreach ($fields as $f) {
+        $old = (string) ($row[$f] ?? '');
+        if ($old === '') {
+            continue;
+        }
+        $new = Scanner::repairCyrillic($old);
+        if ($new !== $old) {
+            $patch[$f] = $new;
+        }
+    }
+
+    if ($patch !== []) {
+        $changes[] = ['row' => $row, 'patch' => $patch];
+    }
+}
+
+if ($changes === []) {
+    echo "Нечего чинить.\n";
+    exit(0);
+}
+
+foreach ($changes as $c) {
+    foreach ($c['patch'] as $f => $new) {
+        printf("  #%-5d %-7s %s\n", $c['row']['id'], $f, mb_substr($new, 0, 60));
+    }
+}
+
+printf("\nТреков затронуто: %d, полей: %d\n", count($changes),
+    array_sum(array_map(static fn($c) => count($c['patch']), $changes)));
+
+if (!$apply) {
+    echo "Это предпросмотр. Для записи: bin/fix-encoding --apply\n";
+    exit(0);
+}
+
+// dup_key считается из артиста и названия — после правки он тоже меняется
+$norm = static fn(string $s): string => preg_replace('/[^\p{L}\p{N}]+/u', '', mb_strtolower($s)) ?? '';
+
+$db->exec('BEGIN');
+try {
+    foreach ($changes as $c) {
+        $row   = $c['row'];
+        $patch = $c['patch'];
+
+        $set = [];
+        $bind = ['id' => $row['id']];
+        foreach ($patch as $f => $new) {
+            $set[] = "$f = :$f";
+            $bind[$f] = $new;
+        }
+
+        $artist = $patch['artist'] ?? (string) ($row['artist'] ?? '');
+        $title  = $patch['title']  ?? (string) ($row['title']  ?? '');
+
+        if ($artist !== '' && $title !== '') {
+            $set[] = 'dup_key = :dup_key';
+            $bind['dup_key'] = $norm($artist) . '|' . $norm($title)
+                             . '|' . (int) round((float) ($row['duration'] ?? 0));
+        }
+
+        $stmt = $db->prepare('UPDATE tracks SET ' . implode(', ', $set) . ' WHERE id = :id');
+        $stmt->execute($bind);
+    }
+    $db->exec('COMMIT');
+} catch (Throwable $e) {
+    $db->exec('ROLLBACK');
+    fwrite(STDERR, 'Не записалось: ' . $e->getMessage() . "\n");
+    exit(1);
+}
+
+Cache::flush();
+
+echo "Записано.\n";
