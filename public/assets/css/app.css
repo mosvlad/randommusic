@@ -164,9 +164,13 @@ a:hover, a:focus-visible { color: var(--accent-hover); }
   color: var(--panel-text);
 }
 
+/* Высота блока задана жёстко.
+   Названия у треков разной длины, и раньше панель дёргалась вверх-вниз
+   на каждом переключении. Под заголовок отведено ровно две строки, под
+   артиста и подпись — по одной; высоты в em, поэтому всё съезжает вместе
+   с clamp() шрифтов и остаётся согласованным на любом экране. */
 .now-playing {
   text-align: center;
-  min-height: 3.4rem;
   display: grid;
   align-content: center;
   gap: 0.15rem;
@@ -176,20 +180,35 @@ a:hover, a:focus-visible { color: var(--accent-hover); }
   font-size: clamp(1.35rem, 4.5vw, 1.9rem);
   font-weight: 400;
   line-height: 1.15;
+  height: 2.3em;              /* две строки */
   color: #2b2b2b;
+  overflow: hidden;
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .now-playing__artist {
   font-size: clamp(1rem, 3.2vw, 1.25rem);
+  line-height: 1.2;
+  height: 1.2em;              /* одна строка, резервируется даже пустая */
   color: var(--panel-dim);
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .now-playing__meta {
   font-size: 0.85rem;
+  line-height: 1.2;
+  height: 1.2em;
   color: var(--panel-dim);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .player.is-loading .now-playing__title { opacity: 0.45; }
@@ -281,15 +300,41 @@ a:hover, a:focus-visible { color: var(--accent-hover); }
 .button:hover { background: var(--accent-hover); }
 .button:active { transform: scale(0.97); }
 
+/* Три колонки: воспроизведение слева, RANDOM ровно по центру панели,
+   громкость справа. Боковые колонки одинаковой ширины (1fr), поэтому
+   центральная кнопка стоит по центру независимо от их содержимого. */
 .controls {
-  margin-top: 1rem;
+  margin-top: 0.9rem;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.controls__side {
   display: flex;
-  justify-content: center;
+  align-items: center;
+  gap: 0.15rem;
+  min-width: 0;
+  color: #4f4f4f;
+}
+
+.controls__side--left  { justify-self: start; }
+.controls__side--right { justify-self: end; }
+
+.controls :focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.controls .button--random:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -4px;
 }
 
 .button--random {
-  min-width: min(16rem, 100%);
-  padding: 0.7rem 2.5rem;
+  min-width: min(15rem, 100%);
+  padding: 0.65rem 2.2rem;
   font-size: clamp(1.5rem, 5vw, 1.75rem);
   letter-spacing: 0.07em;
   box-shadow: 0 2px 10px rgba(244, 81, 30, 0.28);
@@ -299,18 +344,8 @@ a:hover, a:focus-visible { color: var(--accent-hover); }
 
 .player.is-loading .button--random { opacity: 0.65; }
 
-/* Второй план */
-.controls-secondary {
-  margin-top: 0.7rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.15rem;
-  /* Панель полупрозрачно-белая поверх фотографии: светло-серый на ней
-     теряется. Берём тон, читаемый и на светлых, и на тёмных участках фона. */
-  color: #4f4f4f;
-}
-
+/* Второй план: серый тон, читаемый на полупрозрачно-белой панели поверх
+   фотографии — светло-серый на ней терялся. */
 .icon-btn {
   display: inline-grid;
   place-items: center;
@@ -335,17 +370,11 @@ a:hover, a:focus-visible { color: var(--accent-hover); }
 #btn-play[data-state="playing"] .i-play { display: none; }
 #btn-play[data-state="playing"] .i-pause { display: block; }
 
-.controls-secondary :focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 3px;
-}
-
 /* Громкость */
 .volume {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  margin-left: 0.6rem;
   color: inherit;
 }
 
@@ -657,9 +686,18 @@ a:hover, a:focus-visible { color: var(--accent-hover); }
   .chat__row { grid-template-columns: 1fr; }
   .chat__form { grid-template-columns: 1fr; }
 
-  /* На узком экране RANDOM занимает всю ширину, второй план ужимается */
-  .button--random { width: 100%; }
-  .controls-secondary { gap: 0.1rem; }
-  .volume { margin-left: 0.3rem; }
-  .volume input[type="range"] { width: 4rem; }
+  /* На узком экране три колонки не помещаются: RANDOM уходит наверх
+     во всю ширину, под ним воспроизведение и громкость по краям */
+  .controls {
+    grid-template-columns: auto 1fr;
+    gap: 0.5rem 0.75rem;
+  }
+  .controls .button--random {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    width: 100%;
+  }
+  .controls__side--left  { grid-column: 1; grid-row: 2; }
+  .controls__side--right { grid-column: 2; grid-row: 2; }
+  .volume input[type="range"] { width: 100%; max-width: 8rem; }
 }

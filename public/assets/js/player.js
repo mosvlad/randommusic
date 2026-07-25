@@ -43,7 +43,6 @@ export class Player {
     this.elDur = root.querySelector('#time-total');
 
     this.btnPlay = root.querySelector('#btn-play');
-    this.btnNext = root.querySelector('#btn-next');
     this.btnPrev = root.querySelector('#btn-prev');
     this.btnRandom = root.querySelector('#btn-random');
     this.volInput = root.querySelector('#volume');
@@ -139,7 +138,6 @@ export class Player {
 
   #bind() {
     this.btnRandom.addEventListener('click', () => this.random());
-    this.btnNext.addEventListener('click', () => this.random());
     this.btnPrev.addEventListener('click', () => this.previous());
     this.btnPlay.addEventListener('click', () => this.toggle());
 
@@ -242,7 +240,6 @@ export class Player {
 
     this.elTitle.textContent = track.title || 'Без названия';
     this.elArtist.textContent = track.artist || '';
-    this.elArtist.hidden = !track.artist;
     this.elMeta.textContent = [
       track.album || null,
       track.year || null,

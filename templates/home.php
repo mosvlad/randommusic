@@ -83,7 +83,9 @@ $canonical = $origin . $base . ($isPermalink && $initial ? '/t/' . $initial['id'
 
     <div class="now-playing">
       <div class="now-playing__title" id="np-title"><?= $e($initial['title'] ?? 'Загружаю…') ?></div>
-      <div class="now-playing__artist" id="np-artist"<?= empty($initial['artist']) ? ' hidden' : '' ?>><?= $e($initial['artist'] ?? '') ?></div>
+<?php /* Строка артиста остаётся в потоке даже пустой: иначе панель
+             прыгала бы по высоте на треках без тега. */ ?>
+      <div class="now-playing__artist" id="np-artist"><?= $e($initial['artist'] ?? '') ?></div>
       <div class="now-playing__meta" id="np-meta"><?php
         if ($initial) {
             echo $e(implode(' · ', array_filter([
@@ -112,33 +114,32 @@ $canonical = $origin . $base . ($isPermalink && $initial ? '/t/' . $initial['id'
       ?></span>
     </div>
 
-    <!-- Главное действие сайта — одна большая оранжевая кнопка, как в v1.
-         Всё остальное управление намеренно приглушено до второго плана. -->
+    <!-- Одна строка: воспроизведение слева, RANDOM по центру, громкость
+         справа. Кнопки «следующий» нет намеренно — её работу и делает
+         RANDOM, две кнопки с одним действием только путали бы. -->
     <div class="controls">
+      <div class="controls__side controls__side--left">
+        <button type="button" class="icon-btn" id="btn-prev" aria-label="Предыдущий трек" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
+        </button>
+
+        <button type="button" class="icon-btn" id="btn-play" data-state="paused" aria-label="Слушать">
+          <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+          <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
+        </button>
+      </div>
+
       <button type="button" class="button button--random" id="btn-random">RANDOM</button>
-    </div>
 
-    <div class="controls-secondary">
-      <button type="button" class="icon-btn" id="btn-prev" aria-label="Предыдущий" disabled>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
-      </button>
-
-      <button type="button" class="icon-btn" id="btn-play" data-state="paused" aria-label="Слушать">
-        <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
-        <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
-      </button>
-
-      <button type="button" class="icon-btn" id="btn-next" aria-label="Следующий">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg>
-      </button>
-
-      <label class="volume">
-        <span class="visually-hidden">Громкость</span>
-        <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
-          <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/>
-        </svg>
-        <input type="range" id="volume" min="0" max="100" value="50">
-      </label>
+      <div class="controls__side controls__side--right">
+        <label class="volume">
+          <span class="visually-hidden">Громкость</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/>
+          </svg>
+          <input type="range" id="volume" min="0" max="100" value="50">
+        </label>
+      </div>
     </div>
 
     <audio id="audio" preload="metadata"<?= $initial ? ' src="' . $e($initial['url']) . '"' : '' ?>></audio>
