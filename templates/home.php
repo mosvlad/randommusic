@@ -59,6 +59,7 @@ $canonical = $origin . $base . ($isPermalink && $initial ? '/t/' . $initial['id'
 <meta name="theme-color" content="#191919">
 
 <link rel="preload" href="<?= $e($base) ?>/assets/fonts/yanone-kaffeesatz-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="<?= $e($asset('/assets/css/fonts.css')) ?>">
 <link rel="stylesheet" href="<?= $e($asset('/assets/css/app.css')) ?>">
 
 <meta name="yandex-verification" content="f4ff80d20a325806">
@@ -146,17 +147,15 @@ $canonical = $origin . $base . ($isPermalink && $initial ? '/t/' . $initial['id'
     <audio id="preloader" preload="auto" hidden></audio>
 
     <div class="player-extra">
+      <button type="button" class="spoiler-toggle" id="history-toggle" aria-expanded="false" aria-controls="history">
+        Показать историю
+      </button>
       <span id="player-status" role="status" aria-live="polite"></span>
-      <span>
-        <?php if ($initial): ?>
-          <a id="share-link" href="<?= $e($base) ?>/t/<?= (int) $initial['id'] ?>">ссылка на трек</a>
-        <?php endif; ?>
-      </span>
+      <?php if ($initial): ?>
+        <a id="share-link" href="<?= $e($base) ?>/t/<?= (int) $initial['id'] ?>">ссылка на трек</a>
+      <?php endif; ?>
     </div>
 
-    <button type="button" class="spoiler-toggle" id="history-toggle" aria-expanded="false" aria-controls="history">
-      Показать историю
-    </button>
     <div class="history" id="history" data-open="0">
       <ul class="history__list" id="history-list"></ul>
     </div>

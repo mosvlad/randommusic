@@ -137,9 +137,11 @@ export class Player {
   // --- Внутреннее --------------------------------------------------------
 
   #bind() {
-    this.btnRandom.addEventListener('click', () => this.random());
-    this.btnPrev.addEventListener('click', () => this.previous());
-    this.btnPlay.addEventListener('click', () => this.toggle());
+    // Через optional chaining: разметка и скрипт могут разъехаться
+    // по версиям в кэше, и это не повод ронять всю страницу
+    this.btnRandom?.addEventListener('click', () => this.random());
+    this.btnPrev?.addEventListener('click', () => this.previous());
+    this.btnPlay?.addEventListener('click', () => this.toggle());
 
     this.audio.addEventListener('ended', () => {
       this.#report('played');
@@ -165,7 +167,7 @@ export class Player {
       setTimeout(() => this.random(), 600);
     });
 
-    this.volInput.addEventListener('input', () => {
+    this.volInput?.addEventListener('input', () => {
       const v = Number(this.volInput.value) / 100;
       this.audio.volume = v;
       this.audio.muted = v === 0;
@@ -178,6 +180,8 @@ export class Player {
   }
 
   #bindScrub() {
+    if (!this.progress) return;
+
     const seekTo = (clientX) => {
       const rect = this.progress.getBoundingClientRect();
       const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
@@ -406,9 +410,10 @@ export class Player {
 
   #renderPlayState() {
     const playing = !this.audio.paused && !this.audio.ended;
+    if (!this.btnPlay) return;
     this.btnPlay.setAttribute('aria-label', playing ? 'Пауза' : 'Слушать');
     this.btnPlay.dataset.state = playing ? 'playing' : 'paused';
-    this.btnPrev.disabled = this.pos <= 0 && this.history.length <= 1;
+    if (this.btnPrev) this.btnPrev.disabled = this.pos <= 0 && this.history.length <= 1;
   }
 
   #renderProgress() {
@@ -462,7 +467,7 @@ export class Player {
       if (saved !== null) v = Math.min(1, Math.max(0, Number(saved)));
     } catch {}
     this.audio.volume = v;
-    this.volInput.value = String(Math.round(v * 100));
+    if (this.volInput) this.volInput.value = String(Math.round(v * 100));
   }
 
   #status(text) {

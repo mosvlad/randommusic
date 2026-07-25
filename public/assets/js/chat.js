@@ -162,6 +162,9 @@ export class Chat {
     for (const m of messages) {
       if (this.seen.has(m.id)) continue;
       this.seen.add(m.id);
+      // Пришло подтверждение своего сообщения — убираем заглушку,
+      // иначе оно висело бы в ленте дважды до истечения таймаута
+      this.#dropPending(m.id);
       this.log.append(this.#node(m));
       if (m.id > this.lastId) this.lastId = m.id;
       if (this.oldestId === null || m.id < this.oldestId) this.oldestId = m.id;
@@ -307,6 +310,18 @@ export class Chat {
       if (data.token) this.token = data.token;
       this.inputContent.value = '';
       this.inputContent.focus();
+
+      // Привязываем заглушку к присвоенному серверу id. Опрос мог успеть
+      // притащить сообщение раньше, чем вернулся ответ на отправку, —
+      // тогда убираем заглушку сразу.
+      if (typeof data.id === 'number') {
+        if (this.seen.has(data.id)) {
+          pending.remove();
+        } else {
+          pending.dataset.pendingFor = String(data.id);
+        }
+      }
+
       this.wake();
     } catch {
       pending.remove();
@@ -321,9 +336,15 @@ export class Chat {
     this.log.append(node);
     this.scrollToBottom();
 
-    // Настоящее сообщение придёт следующим опросом и заменит заглушку
-    setTimeout(() => node.remove(), 8000);
+    // Обычно заглушку снимает append(), когда приходит подтверждение.
+    // Таймер — страховка на случай, если сообщение так и не вернулось.
+    setTimeout(() => node.remove(), 15000);
     return node;
+  }
+
+  /** Убрать заглушку, подтверждённую сервером. */
+  #dropPending(id) {
+    this.log.querySelector(`.msg--pending[data-pending-for="${id}"]`)?.remove();
   }
 
   async loadOlder() {

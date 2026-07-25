@@ -56,9 +56,10 @@ DirectoryIndex index.php
         Header set Accept-Ranges "bytes"
     </FilesMatch>
 
-    <FilesMatch "\.php$">
-        Header unset Cache-Control
-    </FilesMatch>
+    # Cache-Control для страниц и API ставит само приложение (no-cache
+    # для HTML, no-store для JSON). В v1 здесь стоял Header unset — он
+    # стирал этот заголовок, HTML уходил вообще без указаний по кэшу,
+    # и браузер придерживал страницу со старым ?v= у ассетов.
 
     # Service worker кэшировать нельзя: он сам управляет кэшем страницы,
     # и застрявшая старая копия чинится только руками посетителя

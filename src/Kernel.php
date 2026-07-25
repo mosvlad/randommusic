@@ -230,6 +230,11 @@ final class Kernel
         $guard  = new Guard();
         $client = Client::id();
 
+        // Обычная отправка формы, а не fetch: значит, JS не сработал.
+        // Показать посетителю голый JSON — худший из возможных исходов,
+        // поэтому такой запрос обрабатываем и возвращаем на страницу.
+        $wantsHtml = !$req->isAjax();
+
         $name    = trim($req->post('name'));
         $content = trim($req->post('content'));
 
@@ -248,6 +253,10 @@ final class Kernel
                 default           => 400,
             };
 
+            if ($wantsHtml) {
+                return Response::redirect($req->base . '/?chat=' . rawurlencode($verdict), 303);
+            }
+
             // Ботам и флудерам новый токен не выдаём
             return Response::error($verdict, $status, $details);
         }
@@ -262,6 +271,11 @@ final class Kernel
             $trackId > 0 ? $trackId : null,
             $verdict === Guard::SHADOW
         );
+
+        if ($wantsHtml) {
+            // 303, чтобы обновление страницы не переотправляло сообщение
+            return Response::redirect($req->base . '/', 303);
+        }
 
         return Response::json([
             'id'    => $id,
@@ -427,7 +441,9 @@ final class Kernel
         // не доезжала до посетителя.
         $docroot = Config::docroot();
         $stamp = 0;
-        foreach (['/assets/css/app.css', '/assets/js/app.js', '/assets/js/player.js', '/assets/js/chat.js'] as $f) {
+        $files = ['/assets/css/app.css', '/assets/css/fonts.css', '/assets/js/app.js',
+                  '/assets/js/player.js', '/assets/js/chat.js'];
+        foreach ($files as $f) {
             $stamp = max($stamp, (int) @filemtime($docroot . $f));
         }
 

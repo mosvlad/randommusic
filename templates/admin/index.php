@@ -21,6 +21,7 @@ $dt = static fn(int $ts): string => gmdate('d.m H:i', $ts);
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Модераторская — Random music</title>
 <meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="<?= $e($base) ?>/assets/css/fonts.css">
 <link rel="stylesheet" href="<?= $e($base) ?>/assets/css/app.css">
 <style>
   body { background-image: none; background: #1a1a1a; padding: 1.5rem 1rem 4rem; }

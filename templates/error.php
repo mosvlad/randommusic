@@ -17,6 +17,7 @@ $title = $titles[$code] ?? 'Ошибка';
 <title><?= View::e($code) ?> — Random music</title>
 <meta name="robots" content="noindex">
 <link rel="icon" href="/assets/img/icon.png" type="image/png">
+<link rel="stylesheet" href="/assets/css/fonts.css">
 <link rel="stylesheet" href="/assets/css/app.css">
 </head>
 <body>

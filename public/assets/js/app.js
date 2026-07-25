@@ -4,8 +4,22 @@
  * id3.js и reCAPTCHA — четыре внешних узла в критическом пути отрисовки.
  */
 
-import { Player } from './player.js';
-import { Chat } from './chat.js';
+/*
+ * Импорт зависимостей — динамический и с версией.
+ *
+ * Статический `import './player.js'` берёт файл по адресу без ?v=, а у .js
+ * стоит Cache-Control: immutable на год. В результате у посетителя мог
+ * оказаться свежий app.js рядом с прошлым player.js — рассогласование,
+ * которое ломало плеер и чат целиком. Версию берём из адреса самого
+ * модуля, так что она всегда совпадает с той, что подставил сервер.
+ */
+const VERSION = new URL(import.meta.url).searchParams.get('v') || '';
+const q = VERSION ? `?v=${encodeURIComponent(VERSION)}` : '';
+
+const [{ Player }, { Chat }] = await Promise.all([
+  import(`./player.js${q}`),
+  import(`./chat.js${q}`),
+]);
 
 const LS = { theme: 'rm.theme' };
 
@@ -93,18 +107,29 @@ const chatRoot = document.querySelector('#chat');
 let player = null;
 let chat = null;
 
+// Плеер и чат поднимаются независимо: сбой в одном не должен уносить
+// второй. Однажды упавший конструктор плеера оставил форму чата без
+// обработчика, и отправка уходила обычным POST-ом на JSON-эндпоинт.
 if (playerRoot) {
-  player = new Player(playerRoot, { initial: boot.initial || null, base: boot.base || '' });
+  try {
+    player = new Player(playerRoot, { initial: boot.initial || null, base: boot.base || '' });
+  } catch (err) {
+    console.error('[player]', err);
+  }
 }
 
 if (chatRoot) {
-  chat = new Chat(chatRoot, {
-    lastId: boot.lastId || 0,
-    token: boot.token || '',
-    online: boot.online || 0,
-    base: boot.base || '',
-    getTrackId: () => (player ? player.trackId : null),
-  });
+  try {
+    chat = new Chat(chatRoot, {
+      lastId: boot.lastId || 0,
+      token: boot.token || '',
+      online: boot.online || 0,
+      base: boot.base || '',
+      getTrackId: () => (player ? player.trackId : null),
+    });
+  } catch (err) {
+    console.error('[chat]', err);
+  }
 }
 
 if (player && chat) initHotkeys(player, chat);
