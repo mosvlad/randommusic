@@ -32,6 +32,12 @@ date_default_timezone_set('UTC');
 // вместе с -wal/-shm пишут обе стороны.
 umask(0002);
 
+// Небезопасная конфигурация не должна проходить незамеченной
+$configProblems = \App\Support\Config::audit();
+if ($configProblems !== []) {
+    error_log('[randommusic] проблемы конфигурации: ' . implode(', ', $configProblems));
+}
+
 if (\App\Support\Config::isDebug()) {
     error_reporting(E_ALL);
     ini_set('display_errors', '1');

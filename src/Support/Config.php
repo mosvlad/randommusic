@@ -87,4 +87,35 @@ final class Config
     {
         return self::bool('APP_DEBUG', false);
     }
+
+    /**
+     * Секреты, без которых приложение работает, но небезопасно.
+     *
+     * Ровно так однажды и вышло: .env стоял с правами 600 и принадлежал
+     * faust_z, а веб работает под faust_z-www — файл не читался, все
+     * значения молча брались из умолчаний, и подпись токенов формы уходила
+     * на публично известную строку. Сайт при этом выглядел исправным.
+     * Теперь такое состояние видно в /api/v1/health и в логе.
+     *
+     * @return string[] список проблем, пустой массив — всё в порядке
+     */
+    public static function audit(): array
+    {
+        self::load();
+        $problems = [];
+
+        $envFile = APP_ROOT . '/.env';
+        if (!is_readable($envFile)) {
+            $problems[] = 'env_unreadable';
+        }
+
+        foreach (['CLIENT_SALT', 'ADMIN_TOKEN'] as $key) {
+            $v = (string) (self::$values[$key] ?? '');
+            if ($v === '' || strlen($v) < 24) {
+                $problems[] = 'weak_' . strtolower($key);
+            }
+        }
+
+        return $problems;
+    }
 }

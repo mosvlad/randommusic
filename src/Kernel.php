@@ -285,7 +285,9 @@ final class Kernel
 
     private static function health(): Response
     {
-        $problems = [];
+        // Первым делом конфигурация: если .env не читается, всё остальное
+        // работает на умолчаниях и выглядит здоровым
+        $problems = Config::audit();
 
         try {
             $index = new TrackIndex();

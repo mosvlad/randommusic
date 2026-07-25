@@ -27,7 +27,7 @@ public_html/randommusic.insomnia247.nl/   ← docroot
 ## Запуск с нуля
 
 ```bash
-cp .env.example .env && chmod 600 .env    # заполнить ADMIN_TOKEN, CLIENT_SALT
+cp .env.example .env && chmod 640 .env    # заполнить ADMIN_TOKEN, CLIENT_SALT
 bin/migrate                                # создать базы
 bin/import-legacy                          # перенести чат из messages.json
 bin/scan --full                            # обойти медиатеку (~6 мин на 3900 файлов)
@@ -91,3 +91,8 @@ journalctl --user -u randommusic-scan -n 50
 Веб работает под `faust_z-www`, CLI — под `faust_z`, оба в группе `faust_z`.
 Каталоги `var/*` имеют setgid, приложение выставляет `umask(0002)` — иначе
 файлы, созданные одной стороной, не сможет записать другая.
+
+`.env` должен быть **640**, а не 600: при 600 его читает только CLI, а веб
+берёт умолчания и подписывает токены формы публично известной строкой.
+Сайт при этом выглядит рабочим, поэтому проверка вынесена в
+`/api/v1/health` (`env_unreadable`, `weak_client_salt`) и в лог при старте.
