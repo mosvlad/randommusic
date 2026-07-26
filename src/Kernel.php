@@ -448,12 +448,29 @@ final class Kernel
         $ancestors = ["'self'"];
 
         if (Config::get('METRIKA_ID', '') !== '') {
-            // Счётчик грузит tag.js и шлёт данные
-            $script[]  = 'https://mc.yandex.ru';
-            $script[]  = 'https://yastatic.net';
-            $img[]     = 'https://mc.yandex.ru';
-            $connect[] = 'https://mc.yandex.ru';
-            $connect[] = 'wss://mc.yandex.ru';
+            $script[] = 'https://mc.yandex.ru';
+            $script[] = 'https://yastatic.net';
+            $img[]    = 'https://mc.yandex.ru';
+
+            // Приёмник данных счётчик выбирает сам, и это не обязательно
+            // mc.yandex.ru: на нашем сайте хиты уходили на mc.yandex.com,
+            // а его не было в списке — браузер молча резал каждый запрос,
+            // и Метрика показывала ноль посетителей при исправном коде.
+            // Поэтому перечисляем все площадки приёма из документации.
+            $hosts = [
+                'mc.yandex.ru', 'mc.yandex.az', 'mc.yandex.by', 'mc.yandex.co.il',
+                'mc.yandex.com', 'mc.yandex.com.am', 'mc.yandex.com.ge',
+                'mc.yandex.com.tr', 'mc.yandex.ee', 'mc.yandex.fr', 'mc.yandex.kg',
+                'mc.yandex.kz', 'mc.yandex.lt', 'mc.yandex.lv', 'mc.yandex.md',
+                'mc.yandex.tj', 'mc.yandex.tm', 'mc.yandex.uz',
+                'mc.webvisor.com', 'mc.webvisor.org',
+            ];
+            foreach ($hosts as $h) {
+                $connect[] = 'https://' . $h;
+                $connect[] = 'wss://' . $h;   // вебвизор ходит по вебсокету
+                $img[]     = 'https://' . $h; // часть хитов уходит картинкой
+            }
+            $connect[] = 'https://yastatic.net';
 
             // Вебвизору и карте кликов нужны blob-фреймы и воркеры
             $child[] = 'blob:';
@@ -463,8 +480,14 @@ final class Kernel
 
             // Иначе запись сессии не проиграется в интерфейсе Метрики:
             // плеер вебвизора открывает сайт во фрейме у себя
-            $ancestors[] = 'https://metrika.yandex.ru';
-            $ancestors[] = 'https://analytics.yandex.com';
+            foreach ([
+                'metrika.yandex.ru', 'metrika.yandex.com', 'metrika.yandex.by',
+                'metrika.yandex.kz', 'metrika.yandex.com.tr', 'metrika.yandex.uz',
+                'metrica.yandex.com', 'analytics.yandex.ru', 'analytics.yandex.com',
+                'analytics.yandex.by', 'analytics.yandex.kz', 'analytics.yandex.com.tr',
+            ] as $h) {
+                $ancestors[] = 'https://' . $h;
+            }
         }
 
         $parts = [
