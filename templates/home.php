@@ -58,8 +58,6 @@ $canonical = $origin . $base . ($isPermalink && $initial ? '/t/' . $initial['id'
 <link rel="manifest" href="<?= $e($base) ?>/manifest.webmanifest">
 <meta name="theme-color" content="#191919">
 
-<link rel="preload" href="<?= $e($base) ?>/assets/fonts/yanone-kaffeesatz-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="<?= $e($asset('/assets/css/fonts.css')) ?>">
 <link rel="stylesheet" href="<?= $e($asset('/assets/css/app.css')) ?>">
 
 <meta name="yandex-verification" content="f4ff80d20a325806">

@@ -441,7 +441,7 @@ final class Kernel
         // не доезжала до посетителя.
         $docroot = Config::docroot();
         $stamp = 0;
-        $files = ['/assets/css/app.css', '/assets/css/fonts.css', '/assets/js/app.js',
+        $files = ['/assets/css/app.css', '/assets/js/app.js',
                   '/assets/js/player.js', '/assets/js/chat.js'];
         foreach ($files as $f) {
             $stamp = max($stamp, (int) @filemtime($docroot . $f));

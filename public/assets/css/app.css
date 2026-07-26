@@ -31,7 +31,11 @@
   --radius:        4px;
   --radius-lg:     8px;
 
-  --font:          "Yanone Kaffeesatz", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  /* Шрифт как в v1. Там Yanone Kaffeesatz импортировался, но до текста не
+     доходил: ресет задавал font:inherit для div, span, h1, p, a, ul, li,
+     а body — 'DejaVu Sans', sans-serif. Отрисовывался системный гротеск,
+     Yanone доставался только html, где текста нет. */
+  --font:          "DejaVu Sans", sans-serif;
   --font-mono:     ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   --shadow:        0 2px 18px rgba(0, 0, 0, 0.45);
@@ -75,7 +79,7 @@ body {
   background-repeat: no-repeat;
 
   color: var(--text);
-  font: 300 20px/1.3 var(--font);
+  font: 400 16px/1.4 var(--font);
   transition: background-image var(--speed) ease;
 }
 
@@ -118,9 +122,9 @@ a:hover, a:focus-visible { color: var(--accent-hover); }
 .site-title {
   margin: 0;
   color: var(--text-strong);
-  font-size: clamp(2.5rem, 9vw, 3.75rem);
+  font-size: clamp(1.9rem, 6.5vw, 2.65rem);
   font-weight: 400;
-  line-height: 1;
+  line-height: 1.05;
   letter-spacing: 0.01em;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
 }
@@ -131,8 +135,8 @@ a:hover, a:focus-visible { color: var(--accent-hover); }
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   color: var(--text-strong);
-  font-size: 1.05rem;
-  line-height: 1.45;
+  font-size: 0.95rem;
+  line-height: 1.5;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
 }
 
@@ -142,7 +146,7 @@ a:hover, a:focus-visible { color: var(--accent-hover); }
 .section-title {
   text-align: center;
   color: var(--text-strong);
-  font-size: clamp(1.8rem, 6vw, 2.5rem);
+  font-size: clamp(1.4rem, 4.5vw, 1.9rem);
   font-weight: 400;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
 }
@@ -176,10 +180,10 @@ a:hover, a:focus-visible { color: var(--accent-hover); }
 }
 
 .now-playing__title {
-  font-size: clamp(1.35rem, 4.5vw, 1.9rem);
+  font-size: clamp(1.05rem, 3.4vw, 1.4rem);
   font-weight: 400;
-  line-height: 1.15;
-  height: 2.3em;              /* две строки */
+  line-height: 1.2;
+  height: 2.4em;              /* ровно две строки */
   color: #2b2b2b;
   overflow: hidden;
   overflow-wrap: anywhere;
@@ -190,9 +194,9 @@ a:hover, a:focus-visible { color: var(--accent-hover); }
 }
 
 .now-playing__artist {
-  font-size: clamp(1rem, 3.2vw, 1.25rem);
-  line-height: 1.2;
-  height: 1.2em;              /* одна строка, резервируется даже пустая */
+  font-size: clamp(0.85rem, 2.6vw, 1.05rem);
+  line-height: 1.25;
+  height: 1.25em;              /* одна строка, резервируется даже пустая */
   color: var(--panel-dim);
   white-space: nowrap;
   overflow: hidden;
@@ -288,9 +292,9 @@ a:hover, a:focus-visible { color: var(--accent-hover); }
   background-color: var(--accent);
   color: #fff;
   font-family: var(--font);
-  font-size: 1.25rem;
+  font-size: 1rem;
   font-weight: 400;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   padding: 0.6rem 1.5rem;
   cursor: pointer;
   transition: background var(--speed), transform var(--speed);
@@ -334,8 +338,8 @@ a:hover, a:focus-visible { color: var(--accent-hover); }
 .button--random {
   min-width: min(15rem, 100%);
   padding: 0.65rem 2.2rem;
-  font-size: clamp(1.5rem, 5vw, 1.75rem);
-  letter-spacing: 0.07em;
+  font-size: clamp(1.1rem, 3.6vw, 1.3rem);
+  letter-spacing: 0.08em;
   box-shadow: 0 2px 10px rgba(244, 81, 30, 0.28);
 }
 
@@ -534,8 +538,8 @@ a:hover, a:focus-visible { color: var(--accent-hover); }
 
 .msg__body {
   color: #333;
-  font-size: 1.05rem;
-  line-height: 1.3;
+  font-size: 0.95rem;
+  line-height: 1.35;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
@@ -568,7 +572,7 @@ a:hover, a:focus-visible { color: var(--accent-hover); }
   background: rgba(255, 255, 255, 0.92);
   color: #333;
   font-family: var(--font);
-  font-size: 1.05rem;
+  font-size: 0.95rem;
 }
 
 .field::placeholder { color: #999; }

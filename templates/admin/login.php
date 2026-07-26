@@ -10,7 +10,6 @@ use App\Http\View;
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Вход — Random music</title>
 <meta name="robots" content="noindex, nofollow">
-<link rel="stylesheet" href="<?= View::e($base) ?>/assets/css/fonts.css">
 <link rel="stylesheet" href="<?= View::e($base) ?>/assets/css/app.css">
 </head>
 <body>

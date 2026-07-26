@@ -6,7 +6,7 @@
  * не нужны никому, а Range-запросы через Cache API работают плохо.
  */
 
-const VERSION = 'rm-v2.0.1';
+const VERSION = 'rm-v2.0.2';
 const SHELL = `${VERSION}-shell`;
 
 // Только то, что запрашивается без ?v=. CSS и JS сюда класть нельзя:
@@ -14,11 +14,8 @@ const SHELL = `${VERSION}-shell`;
 // версии всё равно не совпадёт.
 const SHELL_FILES = [
   '/',
-  '/assets/css/fonts.css',
   '/assets/img/bg_night.jpg',
   '/assets/img/icon-192.png',
-  '/assets/fonts/yanone-kaffeesatz-cyrillic.woff2',
-  '/assets/fonts/yanone-kaffeesatz-latin.woff2',
 ];
 
 self.addEventListener('install', (event) => {
