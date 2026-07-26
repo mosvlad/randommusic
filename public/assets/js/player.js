@@ -4,15 +4,26 @@
  * Отличия от v1:
  *  - метаданные приходят вместе с треком, клиент больше не докачивает mp3
  *    ради ID3-тегов (в v1 этим занимался id3.js);
- *  - следующий трек прогревается заранее, переключение без паузы;
+ *  - следующий трек загружается заранее, переключение без паузы;
  *  - громкость выравнивается по замеренной EBU R128 — в случайной подборке
  *    соседние треки отличаются на десяток децибел;
  *  - все URL относительные: переезд на другой домен не требует правки кода.
+ *
+ * Предзагрузка сделана двумя деками, а не «прогревом кэша».
+ *
+ * Первая версия v2 грузила следующий трек в скрытый элемент, надеясь, что
+ * при переключении основной возьмёт файл из кэша браузера. Не берёт:
+ * медиаэлементы ходят диапазонными запросами и переиспользуют дисковый кэш
+ * ненадёжно. В логах сервера это выглядело как два ответа 206 на один файл
+ * одному клиенту, нередко оба — полный размер. Трафик сайта удваивался
+ * на каждом треке.
+ *
+ * Теперь элементов два и они меняются ролями: тот, что уже скачал трек,
+ * сам становится играющим. Файл загружается ровно один раз.
  */
 
 const LS = {
   volume: 'rm.volume',
-  muted: 'rm.muted',
 };
 
 /** Целевая громкость, LUFS. Компромисс между тишиной и перегрузом. */
@@ -25,6 +36,15 @@ const fmtTime = (s) => {
   return `${m}:${String(r).padStart(2, '0')}`;
 };
 
+/** Адреса из разметки абсолютные, из API — относительные. Приводим к одному виду. */
+const abs = (url) => {
+  try {
+    return new URL(url, location.href).href;
+  } catch {
+    return url;
+  }
+};
+
 export class Player {
   constructor(root, { initial = null, onTrack = null, base = '' } = {}) {
     this.root = root;
@@ -33,8 +53,9 @@ export class Player {
     // поэтому все адреса API строятся от базы, а не от текущего пути
     this.base = base;
 
-    this.audio = root.querySelector('#audio');
-    this.preloader = root.querySelector('#preloader');
+    // Две деки: играющая и та, что загружает следующий трек
+    this.decks = [root.querySelector('#audio'), root.querySelector('#audio-b')].filter(Boolean);
+    this.deck = 0;
 
     this.elTitle = root.querySelector('#np-title');
     this.elArtist = root.querySelector('#np-artist');
@@ -48,7 +69,6 @@ export class Player {
     this.volInput = root.querySelector('#volume');
 
     this.progress = root.querySelector('#progress');
-    this.fill = root.querySelector('#progress-fill');
     this.buffer = root.querySelector('#progress-buffer');
 
     this.historyList = document.querySelector('#history-list');
@@ -59,43 +79,52 @@ export class Player {
     this.history = [];
     this.pos = -1;
     this.recent = [];
-    this.startedAt = 0;
     this.reported = false;
 
-    this.gainNode = null;
     this.ctx = null;
+    this.gain = null;
+    this.sources = new WeakMap();
 
     this.#restoreVolume();
     this.#bind();
 
     if (initial) {
-      this.#apply(initial, { autoplay: false, pushHistory: true });
+      this.#activate(initial, { autoplay: false, pushHistory: true, swap: false });
       this.#prefetch();
     } else {
       this.random();
     }
   }
 
+  /** Играющая дека. */
+  get audio() {
+    return this.decks[this.deck];
+  }
+
+  /** Дека, в которую загружается следующий трек. */
+  get standby() {
+    return this.decks.length > 1 ? this.decks[1 - this.deck] : null;
+  }
+
   // --- Публичное ---------------------------------------------------------
 
   async random() {
-    // Прогретый трек играем сразу, не дожидаясь сети
-    if (this.next) {
+    // Трек уже скачан второй декой — просто меняем их ролями.
+    // Ни одного нового запроса к серверу за файлом.
+    if (this.next && this.#standbyHolds(this.next)) {
       const t = this.next;
       this.next = null;
-      this.#apply(t, { autoplay: true, pushHistory: true });
+      this.#activate(t, { autoplay: true, pushHistory: true, swap: true });
       this.#prefetch();
       return;
     }
 
     this.root.classList.add('is-loading');
     try {
-      const params = new URLSearchParams();
-      if (this.recent.length) params.set('exclude', this.recent.join(','));
-      const res = await fetch(`${this.base}/api/v1/track/random?${params}`, { headers: { Accept: 'application/json' } });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const track = await res.json();
-      this.#apply(track, { autoplay: true, pushHistory: true });
+      const track = this.next || await this.#requestTrack();
+      this.next = null;
+      if (!track) throw new Error('нет трека');
+      this.#activate(track, { autoplay: true, pushHistory: true, swap: false });
       this.#prefetch();
     } catch (err) {
       this.#status('Не удалось получить трек. Попробуйте ещё раз.');
@@ -109,7 +138,7 @@ export class Player {
   previous() {
     if (this.pos > 0) {
       this.pos -= 1;
-      this.#apply(this.history[this.pos], { autoplay: true, pushHistory: false });
+      this.#activate(this.history[this.pos], { autoplay: true, pushHistory: false, swap: false });
     } else {
       this.random();
     }
@@ -118,7 +147,7 @@ export class Player {
   playAt(index) {
     if (index < 0 || index >= this.history.length) return;
     this.pos = index;
-    this.#apply(this.history[index], { autoplay: true, pushHistory: false });
+    this.#activate(this.history[index], { autoplay: true, pushHistory: false, swap: false });
   }
 
   toggle() {
@@ -143,34 +172,48 @@ export class Player {
     this.btnPrev?.addEventListener('click', () => this.previous());
     this.btnPlay?.addEventListener('click', () => this.toggle());
 
-    this.audio.addEventListener('ended', () => {
-      this.#report('played');
-      this.random();
-    });
+    // Слушаем обе деки, но реагируем только на события играющей:
+    // вторая в это время молча качает следующий трек
+    for (const el of this.decks) {
+      const mine = (e) => e.target === this.audio;
 
-    this.audio.addEventListener('play', () => {
-      this.#resumeContext();
-      this.#renderPlayState();
-    });
-    this.audio.addEventListener('pause', () => this.#renderPlayState());
+      el.addEventListener('ended', (e) => {
+        if (!mine(e)) return;
+        this.#report('played');
+        this.random();
+      });
 
-    this.audio.addEventListener('timeupdate', () => this.#renderProgress());
-    this.audio.addEventListener('progress', () => this.#renderBuffer());
-    this.audio.addEventListener('loadedmetadata', () => {
-      this.elDur.textContent = fmtTime(this.audio.duration);
-      this.#syncPositionState();
-    });
+      el.addEventListener('play', (e) => {
+        if (!mine(e)) return;
+        this.#resumeContext();
+        this.#renderPlayState();
+      });
 
-    this.audio.addEventListener('error', () => {
-      // Битый или удалённый файл не должен останавливать эфир
-      this.#status('Трек не открылся, беру следующий');
-      setTimeout(() => this.random(), 600);
-    });
+      el.addEventListener('pause', (e) => mine(e) && this.#renderPlayState());
+      el.addEventListener('timeupdate', (e) => mine(e) && this.#renderProgress());
+      el.addEventListener('progress', (e) => mine(e) && this.#renderBuffer());
+
+      el.addEventListener('loadedmetadata', (e) => {
+        if (!mine(e)) return;
+        this.elDur.textContent = fmtTime(this.audio.duration);
+        this.#syncPositionState();
+      });
+
+      el.addEventListener('error', (e) => {
+        // Сбой второй деки не должен останавливать эфир: просто
+        // забываем прогретый трек и возьмём следующий обычным путём
+        if (!mine(e)) {
+          this.next = null;
+          return;
+        }
+        this.#status('Трек не открылся, беру следующий');
+        setTimeout(() => this.random(), 600);
+      });
+    }
 
     this.volInput?.addEventListener('input', () => {
       const v = Number(this.volInput.value) / 100;
-      this.audio.volume = v;
-      this.audio.muted = v === 0;
+      this.#setVolume(v);
       try {
         localStorage.setItem(LS.volume, String(v));
       } catch {}
@@ -230,17 +273,37 @@ export class Player {
     });
   }
 
-  #apply(track, { autoplay, pushHistory }) {
+  /** Держит ли вторая дека именно этот трек. */
+  #standbyHolds(track) {
+    const s = this.standby;
+    return !!s && !!s.getAttribute('src') && abs(s.src) === abs(track.url);
+  }
+
+  /**
+   * @param {boolean} swap трек уже загружен второй декой — меняем их ролями
+   *                       вместо повторной загрузки того же файла
+   */
+  #activate(track, { autoplay, pushHistory, swap }) {
     if (!track || !track.url) return;
 
     this.#report('skipped');
 
+    if (swap && this.standby) {
+      const leaving = this.audio;
+      leaving.pause();
+      this.deck = 1 - this.deck;
+
+      // Освобождаем прежнюю деку: иначе браузер держит буфер каждого
+      // прослушанного трека до конца сессии
+      leaving.removeAttribute('src');
+      leaving.load();
+    } else {
+      this.audio.src = track.url;
+      this.audio.load();
+    }
+
     this.current = track;
     this.reported = false;
-    this.startedAt = Date.now();
-
-    this.audio.src = track.url;
-    this.audio.load();
 
     this.elTitle.textContent = track.title || 'Без названия';
     this.elArtist.textContent = track.artist || '';
@@ -253,6 +316,7 @@ export class Player {
     this.elDur.textContent = fmtTime(track.duration || 0);
     this.elCur.textContent = '0:00';
     this.#setProgress(0);
+    if (this.buffer) this.buffer.style.width = '0%';
 
     document.title = track.artist
       ? `${track.artist} — ${track.title} · Random music`
@@ -270,10 +334,8 @@ export class Player {
       this.history.push(track);
       if (this.history.length > 60) this.history.shift();
       this.pos = this.history.length - 1;
-      this.#renderHistory();
-    } else {
-      this.#renderHistory();
     }
+    this.#renderHistory();
 
     if (this.onTrack) this.onTrack(track);
 
@@ -287,21 +349,42 @@ export class Player {
     this.#renderPlayState();
   }
 
-  /** Заранее спрашиваем следующий трек и прогреваем его в кэше браузера. */
+  async #requestTrack() {
+    const params = new URLSearchParams();
+    if (this.recent.length) params.set('exclude', this.recent.join(','));
+
+    const res = await fetch(`${this.base}/api/v1/track/random?${params}`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    return res.json();
+  }
+
+  /**
+   * Заранее загружаем следующий трек во вторую деку. Именно она потом
+   * станет играющей, поэтому файл скачивается один раз, а не дважды.
+   */
   async #prefetch() {
+    const s = this.standby;
+    if (!s) return;
+
     try {
-      const params = new URLSearchParams();
-      if (this.recent.length) params.set('exclude', this.recent.join(','));
-      const res = await fetch(`${this.base}/api/v1/track/random?${params}`, { headers: { Accept: 'application/json' } });
-      if (!res.ok) return;
-      const track = await res.json();
+      const track = await this.#requestTrack();
       this.next = track;
-      if (this.preloader) {
-        this.preloader.src = track.url;
-        this.preloader.load();
-      }
+      s.src = track.url;
+      s.load();
     } catch {
       this.next = null;
+    }
+  }
+
+  // --- Звук ---------------------------------------------------------------
+
+  #setVolume(v) {
+    for (const el of this.decks) {
+      el.volume = v;
+      el.muted = v === 0;
     }
   }
 
@@ -311,35 +394,50 @@ export class Player {
    */
   #applyGain(loudness) {
     if (typeof loudness !== 'number' || !Number.isFinite(loudness)) {
-      if (this.gainNode) this.gainNode.gain.value = 1;
+      if (this.gain) this.gain.gain.value = 1;
       return;
     }
 
-    const gain = Math.min(2, Math.max(0.25, Math.pow(10, (TARGET_LUFS - loudness) / 20)));
+    if (!this.#ensureGraph()) return;
 
-    if (!this.ctx) {
-      // Граф собираем только когда он действительно нужен: подключение
-      // элемента к WebAudio до жеста пользователя может оставить вкладку
-      // без звука.
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) return;
-      try {
+    this.gain.gain.value = Math.min(2, Math.max(0.25, Math.pow(10, (TARGET_LUFS - loudness) / 20)));
+  }
+
+  /**
+   * Граф собираем только когда он действительно нужен: подключение
+   * элемента к WebAudio до жеста пользователя может оставить вкладку
+   * без звука. Источник создаётся по одному на деку — повторно для того
+   * же элемента его создать нельзя.
+   */
+  #ensureGraph() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return false;
+
+    try {
+      if (!this.ctx) {
         this.ctx = new AC();
-        const src = this.ctx.createMediaElementSource(this.audio);
-        this.gainNode = this.ctx.createGain();
-        src.connect(this.gainNode).connect(this.ctx.destination);
-      } catch {
-        this.ctx = null;
-        return;
+        this.gain = this.ctx.createGain();
+        this.gain.connect(this.ctx.destination);
       }
+      const el = this.audio;
+      if (!this.sources.has(el)) {
+        const src = this.ctx.createMediaElementSource(el);
+        src.connect(this.gain);
+        this.sources.set(el, src);
+      }
+      return true;
+    } catch {
+      this.ctx = null;
+      this.gain = null;
+      return false;
     }
-
-    if (this.gainNode) this.gainNode.gain.value = gain;
   }
 
   #resumeContext() {
     if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
   }
+
+  // --- Системные контролы --------------------------------------------------
 
   #mediaSession(track) {
     if (!('mediaSession' in navigator)) return;
@@ -352,7 +450,7 @@ export class Player {
       artwork: [96, 128, 192, 256, 384, 512].map((s) => ({
         src: `${origin}${this.base}/assets/img/cover.jpg`,
         sizes: `${s}x${s}`,
-        type: 'image/png',
+        type: 'image/jpeg',
       })),
     });
 
@@ -389,7 +487,9 @@ export class Player {
     } catch {}
   }
 
-  /** Статистика прослушивания: по ней потом пересчитываются веса ротации. */
+  // --- Статистика ----------------------------------------------------------
+
+  /** По ней потом пересчитываются веса ротации. */
   #report(event) {
     if (!this.current || this.reported) return;
     const listened = this.audio.currentTime || 0;
@@ -407,6 +507,8 @@ export class Player {
       }
     } catch {}
   }
+
+  // --- Отрисовка -----------------------------------------------------------
 
   #renderPlayState() {
     const playing = !this.audio.paused && !this.audio.ended;
@@ -466,7 +568,7 @@ export class Player {
       const saved = localStorage.getItem(LS.volume);
       if (saved !== null) v = Math.min(1, Math.max(0, Number(saved)));
     } catch {}
-    this.audio.volume = v;
+    this.#setVolume(v);
     if (this.volInput) this.volInput.value = String(Math.round(v * 100));
   }
 
