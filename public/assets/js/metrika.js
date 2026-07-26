@@ -3,45 +3,57 @@
  *
  * Вынесена в отдельный модуль вместо инлайнового сниппета из интерфейса
  * Метрики: инлайн потребовал бы 'unsafe-inline' в script-src, то есть
- * ослабления CSP на всём сайте ради счётчика. Здесь внешним остаётся
- * только сам tag.js.
+ * ослабления CSP на всём сайте ради счётчика. Внешним остаётся только
+ * сам tag.js.
  *
  * Загружается лениво и только если в .env задан METRIKA_ID.
  */
 
-/** Официальный загрузчик, слово в слово из документации Метрики. */
-function loadTag() {
+/**
+ * Загрузчик слово в слово из кода счётчика, включая проверку на повторную
+ * вставку: если tag.js уже на странице, второй раз не добавляем.
+ */
+function loadTag(src) {
   (function (m, e, t, r, i, k, a) {
     m[i] = m[i] || function () { (m[i].a = m[i].a || []).push(arguments); };
     m[i].l = 1 * new Date();
+    for (var j = 0; j < document.scripts.length; j++) {
+      if (document.scripts[j].src === r) { return; }
+    }
     k = e.createElement(t);
     a = e.getElementsByTagName(t)[0];
     k.async = 1;
     k.src = r;
     a.parentNode.insertBefore(k, a);
-  })(window, document, 'script', 'https://mc.yandex.ru/metrika/tag.js', 'ym');
+  })(window, document, 'script', src, 'ym');
 }
 
-export function initMetrika(id) {
+/**
+ * @param {number|string} id       номер счётчика
+ * @param {boolean}       webvisor запись сессий
+ */
+export function initMetrika(id, webvisor = true) {
   const counter = Number(id);
   if (!counter) return null;
 
-  loadTag();
+  loadTag(`https://mc.yandex.ru/metrika/tag.js?id=${counter}`);
 
   window.ym(counter, 'init', {
+    ssr: true,
+    // Вебвизор пишет сессии целиком, включая набираемый в чате текст.
+    // Переключается через METRIKA_WEBVISOR в .env.
+    webvisor,
     clickmap: true,
-    trackLinks: true,
+    ecommerce: 'dataLayer',
+    referrer: document.referrer,
+    url: location.href,
     accurateTrackBounce: true,
-    // Вебвизор пишет сессии целиком, включая набранный в чате текст.
-    // Для сайта с анонимным общением это лишнее — включайте осознанно.
-    webvisor: false,
-    defer: false,
-    ecommerce: false,
+    trackLinks: true,
   });
 
   /**
    * Достижение цели. В v1 такое пытались делать через
-   * gtag('ButtonNext', 'Next') — вызов был до объявления функции и с
+   * gtag('ButtonNext', 'Next') — вызов стоял до объявления функции и с
    * неверной сигнатурой, поэтому не работал никогда.
    */
   const goal = (name, params) => {

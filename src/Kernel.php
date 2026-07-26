@@ -164,6 +164,7 @@ final class Kernel
             'maxName'     => Config::int('CHAT_MAX_NAME', 32),
             'assetVer'    => self::assetVersion(),
             'metrikaId'   => (string) Config::get('METRIKA_ID', ''),
+            'metrikaWv'   => Config::bool('METRIKA_WEBVISOR', true),
         ]))->withHeader('Content-Security-Policy', self::csp());
     }
 
@@ -438,19 +439,35 @@ final class Kernel
      */
     public static function csp(): string
     {
-        $script = ["'self'"];
-        $img    = ["'self'", 'data:'];
+        $script  = ["'self'"];
+        $img     = ["'self'", 'data:'];
         $connect = ["'self'"];
+        $child   = [];
+        $frame   = [];
+        $worker  = ["'self'", 'blob:'];
+        $ancestors = ["'self'"];
 
         if (Config::get('METRIKA_ID', '') !== '') {
-            // Метрика грузит tag.js, шлёт запросы и ставит пиксель в noscript
+            // Счётчик грузит tag.js и шлёт данные
             $script[]  = 'https://mc.yandex.ru';
+            $script[]  = 'https://yastatic.net';
             $img[]     = 'https://mc.yandex.ru';
             $connect[] = 'https://mc.yandex.ru';
-            $connect[] = 'https://mc.yandex.com';
+            $connect[] = 'wss://mc.yandex.ru';
+
+            // Вебвизору и карте кликов нужны blob-фреймы и воркеры
+            $child[] = 'blob:';
+            $child[] = 'https://mc.yandex.ru';
+            $frame[] = 'blob:';
+            $frame[] = 'https://mc.yandex.ru';
+
+            // Иначе запись сессии не проиграется в интерфейсе Метрики:
+            // плеер вебвизора открывает сайт во фрейме у себя
+            $ancestors[] = 'https://metrika.yandex.ru';
+            $ancestors[] = 'https://analytics.yandex.com';
         }
 
-        return implode('; ', [
+        $parts = [
             "default-src 'self'",
             'script-src ' . implode(' ', $script),
             // unsafe-inline остался только ради инлайнового <style> в админке
@@ -459,11 +476,19 @@ final class Kernel
             "font-src 'self'",
             "media-src 'self'",
             'connect-src ' . implode(' ', $connect),
+            'worker-src ' . implode(' ', $worker),
             "form-action 'self'",
-            "frame-ancestors 'self'",
+            'frame-ancestors ' . implode(' ', $ancestors),
             "base-uri 'self'",
             "object-src 'none'",
-        ]);
+        ];
+
+        if ($child !== []) {
+            $parts[] = 'child-src ' . implode(' ', $child);
+            $parts[] = 'frame-src ' . implode(' ', $frame);
+        }
+
+        return implode('; ', $parts);
     }
 
     /**

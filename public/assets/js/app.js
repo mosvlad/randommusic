@@ -141,7 +141,7 @@ if (player && chat) initHotkeys(player, chat);
 if (boot.metrika) {
   import(`./metrika.js${q}`)
     .then(({ initMetrika }) => {
-      const ym = initMetrika(boot.metrika);
+      const ym = initMetrika(boot.metrika, boot.metrikaWv !== false);
       if (!ym) return;
 
       // Цели, ради которых счётчик и ставится: переключение трека и

@@ -13,6 +13,7 @@
  * @var int        $maxName
  * @var string     $assetVer
  * @var string     $metrikaId
+ * @var bool       $metrikaWv
  */
 
 use App\Http\View;
@@ -236,6 +237,7 @@ $canonical = $origin . $base . ($isPermalink && $initial ? '/t/' . $initial['id'
     'token'   => $token,
     'online'  => $online,
     'metrika' => $metrikaId !== '' ? (int) $metrikaId : null,
+    'metrikaWv' => $metrikaWv,
 ]) ?></script>
 <script type="module" src="<?= $e($asset('/assets/js/app.js')) ?>"></script>
 
