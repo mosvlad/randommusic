@@ -31,14 +31,15 @@ if [ "$TARGET_MODE" = "prod" ]; then
 fi
 
 echo "==> Копирую публичные файлы"
-rsync -a --delete \
-  --exclude='.gitkeep' \
-  "$APP/public/assets/" "$TARGET/assets/"
 
-cp "$APP/public/index.php"           "$TARGET/index.php"
-cp "$APP/public/.htaccess"           "$TARGET/.htaccess"
-cp "$APP/public/manifest.webmanifest" "$TARGET/manifest.webmanifest" 2>/dev/null || true
-cp "$APP/public/sw.js"               "$TARGET/sw.js"               2>/dev/null || true
+# Ассеты — с --delete, чтобы не копились файлы от прошлых версий
+rsync -a --delete --exclude='.gitkeep' "$APP/public/assets/" "$TARGET/assets/"
+
+# Всё остальное из public/ — без --delete: в веб-корне рядом живут симлинки
+# на медиатеку и остатки v1 для старых вкладок, их трогать нельзя.
+# Копируется всё содержимое, включая файлы подтверждения прав на сайт,
+# чтобы каждый новый такой файл не требовал правки этого скрипта.
+rsync -a --exclude='assets/' --exclude='.gitkeep' "$APP/public/" "$TARGET/"
 
 # На обкатке закрываем от поисковиков файлом: он перекрывает динамический роут
 if [ "$TARGET_MODE" = "staging" ]; then
