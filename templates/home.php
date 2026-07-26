@@ -12,6 +12,7 @@
  * @var int        $maxLen
  * @var int        $maxName
  * @var string     $assetVer
+ * @var string     $metrikaId
  */
 
 use App\Http\View;
@@ -234,6 +235,7 @@ $canonical = $origin . $base . ($isPermalink && $initial ? '/t/' . $initial['id'
     'lastId'  => $lastId,
     'token'   => $token,
     'online'  => $online,
+    'metrika' => $metrikaId !== '' ? (int) $metrikaId : null,
 ]) ?></script>
 <script type="module" src="<?= $e($asset('/assets/js/app.js')) ?>"></script>
 
@@ -244,6 +246,11 @@ $canonical = $origin . $base . ($isPermalink && $initial ? '/t/' . $initial['id'
     'url'         => $origin . $base . '/',
     'description' => $description,
 ]) ?></script>
+
+<?php if ($metrikaId !== ''): ?>
+<noscript><div><img src="https://mc.yandex.ru/watch/<?= (int) $metrikaId ?>"
+     style="position:absolute; left:-9999px" alt="" width="1" height="1"></div></noscript>
+<?php endif; ?>
 
 </body>
 </html>

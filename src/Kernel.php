@@ -163,7 +163,8 @@ final class Kernel
             'maxLen'      => Config::int('CHAT_MAX_LEN', 256),
             'maxName'     => Config::int('CHAT_MAX_NAME', 32),
             'assetVer'    => self::assetVersion(),
-        ]));
+            'metrikaId'   => (string) Config::get('METRIKA_ID', ''),
+        ]))->withHeader('Content-Security-Policy', self::csp());
     }
 
     private static function trackRandom(Request $req): Response
@@ -426,6 +427,43 @@ final class Kernel
 
         return Response::text($track === null ? '' : rawurldecode($track['url']))
             ->withHeader('X-Legacy', 'v1-compat');
+    }
+
+    /**
+     * Политика безопасности содержимого.
+     *
+     * Собирается здесь, а не в .htaccess: список разрешённых источников
+     * зависит от того, подключена ли аналитика. Статике CSP не нужна —
+     * она действует на документ.
+     */
+    public static function csp(): string
+    {
+        $script = ["'self'"];
+        $img    = ["'self'", 'data:'];
+        $connect = ["'self'"];
+
+        if (Config::get('METRIKA_ID', '') !== '') {
+            // Метрика грузит tag.js, шлёт запросы и ставит пиксель в noscript
+            $script[]  = 'https://mc.yandex.ru';
+            $img[]     = 'https://mc.yandex.ru';
+            $connect[] = 'https://mc.yandex.ru';
+            $connect[] = 'https://mc.yandex.com';
+        }
+
+        return implode('; ', [
+            "default-src 'self'",
+            'script-src ' . implode(' ', $script),
+            // unsafe-inline остался только ради инлайнового <style> в админке
+            "style-src 'self' 'unsafe-inline'",
+            'img-src ' . implode(' ', $img),
+            "font-src 'self'",
+            "media-src 'self'",
+            'connect-src ' . implode(' ', $connect),
+            "form-action 'self'",
+            "frame-ancestors 'self'",
+            "base-uri 'self'",
+            "object-src 'none'",
+        ]);
     }
 
     /**

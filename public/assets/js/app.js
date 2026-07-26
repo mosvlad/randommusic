@@ -134,6 +134,24 @@ if (chatRoot) {
 
 if (player && chat) initHotkeys(player, chat);
 
+/* --- Аналитика ------------------------------------------------------------
+   Счётчик грузится только если задан METRIKA_ID, и после того, как плеер и
+   чат уже работают: аналитика не должна влиять на отзывчивость страницы. */
+
+if (boot.metrika) {
+  import(`./metrika.js${q}`)
+    .then(({ initMetrika }) => {
+      const ym = initMetrika(boot.metrika);
+      if (!ym) return;
+
+      // Цели, ради которых счётчик и ставится: переключение трека и
+      // отправка сообщения. Именно это в v1 пытались считать и не смогли.
+      document.querySelector('#btn-random')?.addEventListener('click', () => ym.goal('next_track'));
+      document.querySelector('#chat-form')?.addEventListener('submit', () => ym.goal('chat_message'));
+    })
+    .catch((err) => console.error('[metrika]', err));
+}
+
 /* --- PWA: сайт слушают фоном с телефона, ему полезно ставиться на экран --- */
 
 if ('serviceWorker' in navigator && (boot.base || '') === '') {
