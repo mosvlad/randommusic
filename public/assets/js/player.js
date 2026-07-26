@@ -4,22 +4,32 @@
  * Отличия от v1:
  *  - метаданные приходят вместе с треком, клиент больше не докачивает mp3
  *    ради ID3-тегов (в v1 этим занимался id3.js);
- *  - следующий трек загружается заранее, переключение без паузы;
+ *  - следующий трек известен заранее: метаданные лежат наготове, поэтому
+ *    нажатие RANDOM не ждёт обращения к серверу;
  *  - громкость выравнивается по замеренной EBU R128 — в случайной подборке
  *    соседние треки отличаются на десяток децибел;
  *  - все URL относительные: переезд на другой домен не требует правки кода.
  *
- * Предзагрузка сделана двумя деками, а не «прогревом кэша».
+ * Почему аудио НЕ загружается заранее.
  *
- * Первая версия v2 грузила следующий трек в скрытый элемент, надеясь, что
- * при переключении основной возьмёт файл из кэша браузера. Не берёт:
- * медиаэлементы ходят диапазонными запросами и переиспользуют дисковый кэш
- * ненадёжно. В логах сервера это выглядело как два ответа 206 на один файл
- * одному клиенту, нередко оба — полный размер. Трафик сайта удваивался
- * на каждом треке.
+ * Сначала следующий трек грузился в скрытый элемент — в расчёте на кэш
+ * браузера. Логи показали два ответа 206 на один файл одному клиенту,
+ * нередко оба полного размера: медиаэлементы ходят диапазонными запросами
+ * и переиспользуют дисковый кэш ненадёжно.
  *
- * Теперь элементов два и они меняются ролями: тот, что уже скачал трек,
- * сам становится играющим. Файл загружается ровно один раз.
+ * Тогда сделали две деки, меняющиеся ролями, чтобы играл ровно тот элемент,
+ * который скачал файл. Логи снова показали дубли:
+ *
+ *     14:52:44  148.mp3  8648565   загрузка во вторую деку
+ *     14:54:11  148.mp3  8517493   тот же файл заново, когда заиграл
+ *
+ * Причина глубже реализации: браузер выбрасывает буфер простаивающего
+ * элемента и качает файл повторно, когда доходит до воспроизведения.
+ * Предзагружать аудио попросту нечем — сохранить скачанное нельзя.
+ *
+ * Поэтому заранее запрашиваются только метаданные следующего трека
+ * (пара сотен байт). Нажатие RANDOM не ждёт сервер, название появляется
+ * мгновенно, а сам файл скачивается один раз — когда его слушают.
  */
 
 const LS = {
@@ -53,9 +63,7 @@ export class Player {
     // поэтому все адреса API строятся от базы, а не от текущего пути
     this.base = base;
 
-    // Две деки: играющая и та, что загружает следующий трек
-    this.decks = [root.querySelector('#audio'), root.querySelector('#audio-b')].filter(Boolean);
-    this.deck = 0;
+    this.audio = root.querySelector('#audio');
 
     this.elTitle = root.querySelector('#np-title');
     this.elArtist = root.querySelector('#np-artist');
@@ -83,48 +91,36 @@ export class Player {
 
     this.ctx = null;
     this.gain = null;
-    this.sources = new WeakMap();
+    this.source = null;
 
     this.#restoreVolume();
     this.#bind();
 
     if (initial) {
-      this.#activate(initial, { autoplay: false, pushHistory: true, swap: false });
+      this.#activate(initial, { autoplay: false, pushHistory: true });
       this.#prefetch();
     } else {
       this.random();
     }
   }
 
-  /** Играющая дека. */
-  get audio() {
-    return this.decks[this.deck];
-  }
-
-  /** Дека, в которую загружается следующий трек. */
-  get standby() {
-    return this.decks.length > 1 ? this.decks[1 - this.deck] : null;
-  }
-
   // --- Публичное ---------------------------------------------------------
 
   async random() {
-    // Трек уже скачан второй декой — просто меняем их ролями.
-    // Ни одного нового запроса к серверу за файлом.
-    if (this.next && this.#standbyHolds(this.next)) {
+    // Метаданные следующего трека уже лежат наготове — ждать сервер не нужно
+    if (this.next) {
       const t = this.next;
       this.next = null;
-      this.#activate(t, { autoplay: true, pushHistory: true, swap: true });
+      this.#activate(t, { autoplay: true, pushHistory: true });
       this.#prefetch();
       return;
     }
 
     this.root.classList.add('is-loading');
     try {
-      const track = this.next || await this.#requestTrack();
-      this.next = null;
+      const track = await this.#requestTrack();
       if (!track) throw new Error('нет трека');
-      this.#activate(track, { autoplay: true, pushHistory: true, swap: false });
+      this.#activate(track, { autoplay: true, pushHistory: true });
       this.#prefetch();
     } catch (err) {
       this.#status('Не удалось получить трек. Попробуйте ещё раз.');
@@ -138,7 +134,7 @@ export class Player {
   previous() {
     if (this.pos > 0) {
       this.pos -= 1;
-      this.#activate(this.history[this.pos], { autoplay: true, pushHistory: false, swap: false });
+      this.#activate(this.history[this.pos], { autoplay: true, pushHistory: false });
     } else {
       this.random();
     }
@@ -147,7 +143,7 @@ export class Player {
   playAt(index) {
     if (index < 0 || index >= this.history.length) return;
     this.pos = index;
-    this.#activate(this.history[index], { autoplay: true, pushHistory: false, swap: false });
+    this.#activate(this.history[index], { autoplay: true, pushHistory: false });
   }
 
   toggle() {
@@ -172,44 +168,31 @@ export class Player {
     this.btnPrev?.addEventListener('click', () => this.previous());
     this.btnPlay?.addEventListener('click', () => this.toggle());
 
-    // Слушаем обе деки, но реагируем только на события играющей:
-    // вторая в это время молча качает следующий трек
-    for (const el of this.decks) {
-      const mine = (e) => e.target === this.audio;
+    this.audio.addEventListener('ended', () => {
+      this.#report('played');
+      this.random();
+    });
 
-      el.addEventListener('ended', (e) => {
-        if (!mine(e)) return;
-        this.#report('played');
-        this.random();
-      });
+    this.audio.addEventListener('play', () => {
+      this.#resumeContext();
+      this.#renderPlayState();
+    });
 
-      el.addEventListener('play', (e) => {
-        if (!mine(e)) return;
-        this.#resumeContext();
-        this.#renderPlayState();
-      });
+    this.audio.addEventListener('pause', () => this.#renderPlayState());
+    this.audio.addEventListener('timeupdate', () => this.#renderProgress());
+    this.audio.addEventListener('progress', () => this.#renderBuffer());
 
-      el.addEventListener('pause', (e) => mine(e) && this.#renderPlayState());
-      el.addEventListener('timeupdate', (e) => mine(e) && this.#renderProgress());
-      el.addEventListener('progress', (e) => mine(e) && this.#renderBuffer());
+    this.audio.addEventListener('loadedmetadata', () => {
+      this.elDur.textContent = fmtTime(this.audio.duration);
+      this.#syncPositionState();
+    });
 
-      el.addEventListener('loadedmetadata', (e) => {
-        if (!mine(e)) return;
-        this.elDur.textContent = fmtTime(this.audio.duration);
-        this.#syncPositionState();
-      });
-
-      el.addEventListener('error', (e) => {
-        // Сбой второй деки не должен останавливать эфир: просто
-        // забываем прогретый трек и возьмём следующий обычным путём
-        if (!mine(e)) {
-          this.next = null;
-          return;
-        }
-        this.#status('Трек не открылся, беру следующий');
-        setTimeout(() => this.random(), 600);
-      });
-    }
+    this.audio.addEventListener('error', () => {
+      // Битый или удалённый файл не должен останавливать эфир
+      if (!this.audio.getAttribute('src')) return;
+      this.#status('Трек не открылся, беру следующий');
+      setTimeout(() => this.random(), 600);
+    });
 
     this.volInput?.addEventListener('input', () => {
       const v = Number(this.volInput.value) / 100;
@@ -273,31 +256,18 @@ export class Player {
     });
   }
 
-  /** Держит ли вторая дека именно этот трек. */
-  #standbyHolds(track) {
-    const s = this.standby;
-    return !!s && !!s.getAttribute('src') && abs(s.src) === abs(track.url);
-  }
-
-  /**
-   * @param {boolean} swap трек уже загружен второй декой — меняем их ролями
-   *                       вместо повторной загрузки того же файла
-   */
-  #activate(track, { autoplay, pushHistory, swap }) {
+  #activate(track, { autoplay, pushHistory }) {
     if (!track || !track.url) return;
 
     this.#report('skipped');
 
-    if (swap && this.standby) {
-      const leaving = this.audio;
-      leaving.pause();
-      this.deck = 1 - this.deck;
-
-      // Освобождаем прежнюю деку: иначе браузер держит буфер каждого
-      // прослушанного трека до конца сессии
-      leaving.removeAttribute('src');
-      leaving.load();
-    } else {
+    // Если элемент уже указывает на этот файл, не трогаем src: повторное
+    // присваивание обрывает текущую загрузку и начинает её заново. Именно
+    // так на старте страницы первый трек скачивался дважды — адрес стоял
+    // в разметке, и конструктор присваивал его повторно.
+    if (abs(this.audio.getAttribute('src') || '') !== abs(track.url)) {
+      // Присваивание нового адреса само обрывает загрузку предыдущего
+      // трека — незачем тянуть байты того, что уже не слушают
       this.audio.src = track.url;
       this.audio.load();
     }
@@ -362,18 +332,12 @@ export class Player {
   }
 
   /**
-   * Заранее загружаем следующий трек во вторую деку. Именно она потом
-   * станет играющей, поэтому файл скачивается один раз, а не дважды.
+   * Заранее узнаём следующий трек — только метаданные, без файла.
+   * Благодаря этому нажатие RANDOM не ждёт обращения к серверу.
    */
   async #prefetch() {
-    const s = this.standby;
-    if (!s) return;
-
     try {
-      const track = await this.#requestTrack();
-      this.next = track;
-      s.src = track.url;
-      s.load();
+      this.next = await this.#requestTrack();
     } catch {
       this.next = null;
     }
@@ -382,10 +346,8 @@ export class Player {
   // --- Звук ---------------------------------------------------------------
 
   #setVolume(v) {
-    for (const el of this.decks) {
-      el.volume = v;
-      el.muted = v === 0;
-    }
+    this.audio.volume = v;
+    this.audio.muted = v === 0;
   }
 
   /**
@@ -406,8 +368,8 @@ export class Player {
   /**
    * Граф собираем только когда он действительно нужен: подключение
    * элемента к WebAudio до жеста пользователя может оставить вкладку
-   * без звука. Источник создаётся по одному на деку — повторно для того
-   * же элемента его создать нельзя.
+   * без звука. Источник для элемента создаётся один раз — повторно
+   * его создать нельзя.
    */
   #ensureGraph() {
     const AC = window.AudioContext || window.webkitAudioContext;
@@ -419,11 +381,9 @@ export class Player {
         this.gain = this.ctx.createGain();
         this.gain.connect(this.ctx.destination);
       }
-      const el = this.audio;
-      if (!this.sources.has(el)) {
-        const src = this.ctx.createMediaElementSource(el);
-        src.connect(this.gain);
-        this.sources.set(el, src);
+      if (!this.source) {
+        this.source = this.ctx.createMediaElementSource(this.audio);
+        this.source.connect(this.gain);
       }
       return true;
     } catch {

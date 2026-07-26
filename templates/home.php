@@ -143,10 +143,9 @@ $canonical = $origin . $base . ($isPermalink && $initial ? '/t/' . $initial['id'
       </div>
     </div>
 
-    <?php /* Две деки: играющая и та, что загружает следующий трек. Они
-             меняются ролями, поэтому файл скачивается ровно один раз. */ ?>
+    <?php /* Аудио заранее не загружается: браузер всё равно выбрасывает
+             буфер простаивающего элемента и качает файл повторно. */ ?>
     <audio id="audio" preload="metadata"<?= $initial ? ' src="' . $e($initial['url']) . '"' : '' ?>></audio>
-    <audio id="audio-b" preload="auto"></audio>
 
     <div class="player-extra">
       <button type="button" class="spoiler-toggle" id="history-toggle" aria-expanded="false" aria-controls="history">
