@@ -303,6 +303,11 @@ a:hover, a:focus-visible { color: var(--accent-hover); }
 .button:hover { background: var(--accent-hover); }
 .button:active { transform: scale(0.97); }
 
+/* Кнопка-ссылка (<a class="button">) не должна перекрашивать текст в
+   оранжевый от глобального a:hover — фон кнопки тоже оранжевый. */
+a.button:hover,
+a.button:focus-visible { color: #fff; }
+
 /* Три колонки: воспроизведение слева, RANDOM ровно по центру панели,
    громкость справа. Боковые колонки одинаковой ширины (1fr), поэтому
    центральная кнопка стоит по центру независимо от их содержимого. */
@@ -493,6 +498,131 @@ a:hover, a:focus-visible { color: var(--accent-hover); }
 .history__item:hover { background: var(--accent-dim); }
 .history__item[aria-current="true"] { color: var(--accent); }
 .history__num { color: #999; font-variant-numeric: tabular-nums; min-width: 1.6rem; }
+
+/* --------------------------------------------------------------------------
+   Донат: карточка последнего доната и кнопка «Поддержать проект».
+
+   Свёрстана как мини-панель плеера: та же полупрозрачная подложка и
+   тёмно-серый текст. Слева три строки — надпись капсом, «имя · сумма»,
+   сообщение; справа по центру — кнопка в стиле RANDOM. Единственный
+   оранжевый в карточке — кнопка, чтобы взгляд шёл к ней.
+   -------------------------------------------------------------------------- */
+
+.donate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  margin: 1.4rem 0 0.2rem;
+  padding: 1rem 1.15rem;
+  background: var(--panel);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--panel-text);
+}
+/* Донатов ещё нет — в карточке только кнопка, ставим её по центру */
+.donate:has(.donate__last[hidden]) { justify-content: center; }
+
+.donate__last {
+  flex: 1 1 16rem;
+  min-width: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+.donate__last[hidden] { display: none; }
+
+/* Надпись капсом — структурный ярлык, как мета-строка под названием трека */
+.donate__label {
+  font-size: 0.7rem;
+  font-weight: 400;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: #5b5b5b;
+}
+
+/* Имя и сумма — одной строкой, крупнее тела, тёмно-серые.
+   Разделяет их точка, а не цвет: оранжевый в тексте выбивался. */
+.donate__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.55rem;
+  font-size: 1.05rem;
+  color: #262626;
+}
+.donate__who { font-weight: 700; overflow-wrap: anywhere; }
+.donate__amount {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.donate__amount::before {
+  content: "·";
+  margin-right: 0.55rem;
+  color: #9a9a9a;
+  font-weight: 400;
+}
+
+.donate__message {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: #555;
+  overflow-wrap: anywhere;
+}
+.donate__message[hidden] { display: none; }
+
+/* Размер — как у «Показать историю» (.spoiler-toggle) в соседнем блоке:
+   тот же кегль, паддинги и скругление. Заливку, ховер и вжатие на клике
+   берёт от .button. color задаём явно и на всех состояниях — элемент
+   это <a>, глобальное a:hover иначе перекрасило бы текст в цвет фона. */
+.button--donate {
+  flex: 0 0 auto;
+  align-self: center;
+  display: inline-block;
+  padding: 0.32rem 0.7rem;
+  border-radius: 2px;
+  font-size: 0.95rem;
+  line-height: 1.1;
+  letter-spacing: 0;
+  color: #fff;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.button--donate:hover,
+.button--donate:focus-visible,
+.button--donate:active {
+  background: var(--accent-hover);
+  color: #fff;
+}
+
+@keyframes donate-pulse {
+  from { background: var(--accent-dim); }
+  to   { background: transparent; }
+}
+.donate__last--new {
+  margin: -0.15rem -0.3rem;
+  padding: 0.15rem 0.3rem;
+  border-radius: var(--radius);
+  animation: donate-pulse 1.6s ease-out;
+}
+
+@media (max-width: 560px) {
+  .donate {
+    flex-direction: column;
+    text-align: center;
+  }
+  .donate__last {
+    flex: 1 1 auto;
+    width: 100%;
+    justify-items: center;
+  }
+  .donate__head { justify-content: center; }
+  .button--donate { width: 100%; }
+}
 
 /* --------------------------------------------------------------------------
    Чат

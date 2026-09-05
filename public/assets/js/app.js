@@ -134,6 +134,12 @@ if (chatRoot) {
 
 if (player && chat) initHotkeys(player, chat);
 
+/* --- Донат: последний донат обновляем, пока вкладка открыта ------------- */
+
+import(`./donate.js${q}`)
+  .then(({ initDonate }) => initDonate({ base: boot.base || '', last: boot.donation || null }))
+  .catch((err) => console.error('[donate]', err));
+
 /* --- Аналитика ------------------------------------------------------------
    Счётчик грузится только если задан METRIKA_ID, и после того, как плеер и
    чат уже работают: аналитика не должна влиять на отзывчивость страницы. */
@@ -148,6 +154,8 @@ if (boot.metrika) {
       // отправка сообщения. Именно это в v1 пытались считать и не смогли.
       document.querySelector('#btn-random')?.addEventListener('click', () => ym.goal('next_track'));
       document.querySelector('#chat-form')?.addEventListener('submit', () => ym.goal('chat_message'));
+      document.querySelectorAll('.donate-link').forEach((el) =>
+        el.addEventListener('click', () => ym.goal('donate_click')));
     })
     .catch((err) => console.error('[metrika]', err));
 }

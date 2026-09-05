@@ -14,12 +14,22 @@
  * @var string     $assetVer
  * @var string     $metrikaId
  * @var bool       $metrikaWv
+ * @var array|null $lastDonation
+ * @var string     $donateUrl
  */
 
 use App\Http\View;
 
 $e = static fn($v): string => View::e($v);
 $asset = static fn(string $p): string => $base . $p . '?v=' . $assetVer;
+
+// Сумма доната: '1 500 ₽', '$10'. Тот же формат повторён в donate.js.
+$money = static function (float $amount, string $currency): string {
+    $n = rtrim(rtrim(number_format($amount, 2, '.', ' '), '0'), '.');
+    $sym = ['RUB' => '₽', 'USD' => '$', 'EUR' => '€', 'UAH' => '₴',
+            'BYN' => 'Br', 'KZT' => '₸'][$currency] ?? $currency;
+    return in_array($currency, ['USD', 'EUR'], true) ? $sym . $n : $n . ' ' . $sym;
+};
 
 $trackTitle = $initial
     ? trim(($initial['artist'] ? $initial['artist'] . ' — ' : '') . $initial['title'])
@@ -173,6 +183,25 @@ $canonical = $origin . $base . ($isPermalink && $initial ? '/t/' . $initial['id'
   </section>
 
   <!-- ------------------------------------------------------------------ -->
+  <?php /* Последний донат и ненавязчивая кнопка. Донат приходит на
+           DonationAlerts, таймер складывает его в базу, здесь показываем
+           последний. Открытая вкладка подтягивает новые через donate.js. */ ?>
+  <section class="donate" id="donate" aria-label="Поддержать проект">
+    <div class="donate__last" id="donate-last"<?= $lastDonation ? '' : ' hidden' ?>>
+      <span class="donate__label">последний донат</span>
+      <span class="donate__head">
+        <span class="donate__who" id="donate-who"><?= $e($lastDonation ? ($lastDonation['username'] ?: 'Аноним') : '') ?></span>
+        <span class="donate__amount" id="donate-amount"><?=
+          $lastDonation ? $e($money((float) $lastDonation['amount'], (string) $lastDonation['currency'])) : '' ?></span>
+      </span>
+      <p class="donate__message" id="donate-message"<?= ($lastDonation && $lastDonation['message'] !== '') ? '' : ' hidden' ?>><?=
+        $e($lastDonation['message'] ?? '') ?></p>
+    </div>
+    <a class="button button--donate donate-link" id="donate-btn"
+       href="<?= $e($donateUrl) ?>" target="_blank" rel="noopener">Поддержать проект</a>
+  </section>
+
+  <!-- ------------------------------------------------------------------ -->
   <h2 class="section-title">Lamp chat</h2>
 
   <section class="chat" id="chat" aria-label="Чат">
@@ -225,6 +254,7 @@ $canonical = $origin . $base . ($isPermalink && $initial ? '/t/' . $initial['id'
   <footer class="site-foot">
     <div class="site-foot__links">
       <a href="https://t.me/randommusic_reborn" target="_blank" rel="noopener">Telegram Chat</a>
+      <a class="donate-link" href="<?= $e($donateUrl) ?>" target="_blank" rel="noopener">Поддержать</a>
       <button type="button" class="theme-toggle" id="theme-toggle">День</button>
     </div>
   </footer>
@@ -237,6 +267,7 @@ $canonical = $origin . $base . ($isPermalink && $initial ? '/t/' . $initial['id'
     'lastId'  => $lastId,
     'token'   => $token,
     'online'  => $online,
+    'donation' => $lastDonation,
     'metrika' => $metrikaId !== '' ? (int) $metrikaId : null,
     'metrikaWv' => $metrikaWv,
 ]) ?></script>
