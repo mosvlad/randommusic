@@ -27,6 +27,7 @@ final class Db
         }
 
         $path = "$dir/$name.sqlite";
+        $fresh = !is_file($path);
         $pdo = new PDO('sqlite:' . $path, null, null, [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
@@ -38,6 +39,14 @@ final class Db
         $pdo->exec('PRAGMA busy_timeout = 5000');
         $pdo->exec('PRAGMA synchronous = NORMAL');
         $pdo->exec('PRAGMA foreign_keys = ON');
+
+        // SQLite создаёт файл базы с правами 0644 независимо от umask, а
+        // писать в неё должны обе стороны — веб (faust_z-www) и CLI
+        // (faust_z), обе в группе faust_z. Без группового w вторая сторона
+        // упирается в «attempt to write a readonly database».
+        if ($fresh) {
+            @chmod($path, 0664);
+        }
 
         return self::$connections[$name] = $pdo;
     }
