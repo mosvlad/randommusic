@@ -1,0 +1,41 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+/**
+ * Забрать свежие донаты с DonationAlerts и сложить в базу.
+ *
+ *   bin/donations-poll             тихо (для таймера): печатает только новое
+ *   bin/donations-poll --verbose   с подробностями
+ *
+ * Запускается таймером systemd раз в минуту. Лимит DonationAlerts —
+ * 60 запросов в минуту, так что запас многократный.
+ */
+
+require __DIR__ . '/../src/bootstrap.php';
+
+use App\Donation\DonationAlerts;
+use App\Donation\Repository;
+use App\Support\Db;
+
+$verbose = in_array('--verbose', array_slice($argv, 1), true);
+
+Db::migrate('donations');
+
+$repo = new Repository();
+$api  = new DonationAlerts($repo);
+
+try {
+    $items = $api->recentDonations();
+} catch (Throwable $e) {
+    fwrite(STDERR, 'donations-poll: ' . $e->getMessage() . "\n");
+    exit(1);
+}
+
+$new = $repo->ingest($items);
+
+if ($verbose) {
+    echo 'Получено с DonationAlerts: ' . count($items) . ", новых: $new\n";
+} elseif ($new > 0) {
+    echo "Новых донатов: $new\n";
+}

@@ -1,0 +1,11 @@
+[Unit]
+Description=RandomMusic: опрашивать DonationAlerts раз в минуту
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=15s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

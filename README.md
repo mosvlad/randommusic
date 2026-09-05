@@ -74,6 +74,7 @@ apps/randommusic/          код, вне веб-корня
 │   ├── Kernel.php         роутер и точка входа
 │   ├── Track/             индекс, сканер, статистика
 │   ├── Chat/              хранилище, антиспам, модерация
+│   ├── Donation/          донаты с DonationAlerts (клиент API, хранилище)
 │   ├── Http/              запрос, ответ, шаблоны
 │   └── Support/           конфигурация, БД, кэш, клиент
 ├── templates/             PHP-шаблоны
@@ -81,7 +82,7 @@ apps/randommusic/          код, вне веб-корня
 ├── bin/                   CLI: scan, loudness, migrate, backup, deploy…
 ├── public/                то, что уезжает в веб-корень
 ├── deploy/systemd/        таймеры systemd --user
-├── var/db/                chat.sqlite, tracks.sqlite (не в git)
+├── var/db/                chat.sqlite, tracks.sqlite, donations.sqlite (не в git)
 └── legacy/v1/             снимок первой версии
 
 docroot/
@@ -113,6 +114,8 @@ bin/deploy prod                           # выложить в корень (с
 | Команда | Что делает |
 |---|---|
 | `bin/scan` | Инкрементальный обход медиатеки (секунды) |
+| `bin/donations-poll` | Забрать свежие донаты с DonationAlerts (таймер, раз в минуту) |
+| `bin/donations-auth` | Разовая OAuth-авторизация в DonationAlerts |
 | `bin/loudness` | Замерить громкость партии треков |
 | `bin/fix-encoding` | Починить кириллицу в тегах ID3v1 |
 | `bin/maintenance` | Чистка таблиц, пересчёт весов, WAL |
@@ -121,7 +124,8 @@ bin/deploy prod                           # выложить в корень (с
 | `bin/cleanup-v1` | Убрать мёртвый код первой версии |
 
 Таймеры `systemd --user`: сканирование каждые 15 минут, замер громкости
-каждые 30, обслуживание и бэкап ежедневно.
+каждые 30, опрос DonationAlerts раз в минуту, обслуживание и бэкап
+ежедневно.
 
 ---
 
@@ -136,6 +140,7 @@ bin/deploy prod                           # выложить в корень (с
 | `GET` | `/api/v1/chat?since={id}` | Инкрементальная лента (ETag → 304) |
 | `POST` | `/api/v1/chat` | `name`, `content`, `token`, `website` (honeypot) |
 | `GET` | `/api/v1/chat/history?before={id}` | Подгрузка истории вверх |
+| `GET` | `/api/v1/donation/last` | Последний донат (ETag → 304) |
 | `GET` | `/api/v1/stats` | Сводка |
 | `GET` | `/api/v1/health` | Состояние для мониторинга |
 
@@ -175,10 +180,55 @@ CSP расширяется автоматически, когда счётчик
 Вебвизор пишет сессии целиком, включая набираемый в чате текст;
 отключается `METRIKA_WEBVISOR=0` без правки кода.
 
-Настроены две цели: `next_track` и `chat_message`.
+Настроены три цели: `next_track`, `chat_message` и `donate_click`.
 
 Собственная статистика прослушиваний (что играли, что скипали) копится
 в `tracks.sqlite` независимо от внешних счётчиков и видна в `/admin`.
+
+---
+
+## Донаты
+
+Донаты приходят на страницу автора в DonationAlerts
+(`DONATIONALERTS_URL`, по умолчанию
+[donationalerts.com/r/faust_z](https://www.donationalerts.com/r/faust_z)).
+На главной под плеером — полоса с последним донатом (имя, сумма,
+сообщение) и контурная кнопка «Поддержать проект»; ссылка «Поддержать»
+продублирована в подвале.
+
+Данные забираются официальным REST DonationAlerts, а не парсингом
+виджета: `GET /api/v1/alerts/donations` с Bearer-токеном и правом
+`oauth-donation-index`. Таймер `bin/donations-poll` раз в минуту кладёт
+новые донаты в `donations.sqlite`; страница берёт последний оттуда и
+наружу на каждый просмотр не ходит. Открытая вкладка обновляет донат
+раз в минуту запросом к `/api/v1/donation/last` (ETag → 304), только
+когда она видима.
+
+### Настройка (один раз)
+
+1. Завести приложение на
+   [donationalerts.com/application/clients](https://www.donationalerts.com/application/clients).
+   В поле «URL перенаправления» вписать ровно то же, что стоит в
+   `DONATIONALERTS_REDIRECT_URI` (по умолчанию `http://localhost`) —
+   значение должно совпадать посимвольно.
+2. `client_id` и `client_secret` из приложения — в `.env`
+   (`DONATIONALERTS_CLIENT_ID`, `DONATIONALERTS_CLIENT_SECRET`).
+3. `bin/donations-auth` — откроется ссылка авторизации. Перейти по ней
+   под аккаунтом автора, подтвердить доступ. Браузер уйдёт на
+   `http://localhost/?code=…` (страница не откроется — нужен только
+   адрес).
+4. `bin/donations-auth '<code-или-весь-адрес>'` — токены сохранятся в
+   `donations.sqlite`.
+5. `bin/donations-poll --verbose` — проверить, что донаты забираются.
+
+Access-токен DonationAlerts живёт ~20 лет; при 401 `donations-poll` сам
+обновляет пару токенов по `refresh_token` и пишет их в базу, `.env` при
+этом не трогается. Пока API не настроен, наружу ничего не уходит: кнопка
+и ссылка на страницу доната работают и без интеграции, а полоса с
+последним донатом просто скрыта, пока в базе нет ни одного.
+
+CSP не расширяется: кнопка — обычная ссылка (переход, а не запрос),
+а опрос идёт на свой же `/api/v1/donation/last`.
 
 ## Заметки
 

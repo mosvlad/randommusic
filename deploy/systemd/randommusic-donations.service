@@ -1,0 +1,10 @@
+[Unit]
+Description=RandomMusic: забрать свежие донаты с DonationAlerts
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Nice=10
+WorkingDirectory=/home/faust_z/apps/randommusic
+ExecStart=/usr/bin/php /home/faust_z/apps/randommusic/bin/donations-poll

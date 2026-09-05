@@ -1,0 +1,94 @@
+#!/usr/bin/env php
+<?php
+declare(strict_types=1);
+
+/**
+ * Разовая авторизация в DonationAlerts (OAuth2 Authorization Code).
+ *
+ *   bin/donations-auth               показать ссылку для авторизации
+ *   bin/donations-auth <code|url>    обменять код на токены
+ *   bin/donations-auth refresh       обновить токены по refresh_token
+ *
+ * Заранее: на https://www.donationalerts.com/application/clients заведено
+ * приложение, а в .env заполнены DONATIONALERTS_CLIENT_ID и
+ * DONATIONALERTS_CLIENT_SECRET. Redirect URI приложения должен совпадать
+ * с DONATIONALERTS_REDIRECT_URI (по умолчанию http://localhost).
+ *
+ * Токены сохраняются в var/db/donations.sqlite и оттуда же обновляются;
+ * дублировать их в .env не обязательно.
+ */
+
+require __DIR__ . '/../src/bootstrap.php';
+
+use App\Donation\DonationAlerts;
+use App\Donation\Repository;
+use App\Support\Config;
+use App\Support\Db;
+
+Db::migrate('donations');
+
+$redirectUri = (string) Config::get('DONATIONALERTS_REDIRECT_URI', 'http://localhost');
+$clientId    = (string) Config::get('DONATIONALERTS_CLIENT_ID', '');
+
+$repo = new Repository();
+$api  = new DonationAlerts($repo);
+
+$arg = $argv[1] ?? '';
+
+if ($arg === '') {
+    if ($clientId === '') {
+        fwrite(STDERR, "Сначала заполните DONATIONALERTS_CLIENT_ID и DONATIONALERTS_CLIENT_SECRET в .env\n");
+        exit(1);
+    }
+
+    $url = DonationAlerts::AUTHORIZE . '?' . http_build_query([
+        'client_id'     => $clientId,
+        'redirect_uri'  => $redirectUri,
+        'response_type' => 'code',
+        'scope'         => DonationAlerts::SCOPES,
+    ]);
+
+    echo "1. Откройте ссылку в браузере под нужным аккаунтом DonationAlerts:\n\n";
+    echo "   $url\n\n";
+    echo "2. После подтверждения браузер уйдёт на $redirectUri/?code=...\n";
+    echo "   (страница может не открыться — это нормально, нужен только адрес).\n";
+    echo "   Скопируйте значение code или весь адрес и передайте сюда:\n\n";
+    echo "   bin/donations-auth '<code-или-url>'\n";
+    exit(0);
+}
+
+if ($arg === 'refresh') {
+    try {
+        $api->refresh();
+    } catch (Throwable $e) {
+        fwrite(STDERR, $e->getMessage() . "\n");
+        exit(1);
+    }
+    echo "Токены обновлены и сохранены в donations.sqlite.\n";
+    exit(0);
+}
+
+// Принимаем и голый code, и весь redirect-адрес с ?code=...
+$code = $arg;
+if (str_contains($arg, 'code=')) {
+    parse_str((string) parse_url($arg, PHP_URL_QUERY), $q);
+    $code = (string) ($q['code'] ?? '');
+}
+
+if ($code === '') {
+    fwrite(STDERR, "Не удалось разобрать code из аргумента\n");
+    exit(1);
+}
+
+try {
+    $tokens = $api->exchangeCode($code, $redirectUri);
+} catch (Throwable $e) {
+    fwrite(STDERR, $e->getMessage() . "\n");
+    exit(1);
+}
+
+echo "Готово. Токены сохранены в var/db/donations.sqlite.\n";
+echo "Проверить: bin/donations-poll --verbose\n\n";
+echo "При желании продублируйте в .env как резерв:\n\n";
+echo "DONATIONALERTS_ACCESS_TOKEN={$tokens['access_token']}\n";
+echo "DONATIONALERTS_REFRESH_TOKEN={$tokens['refresh_token']}\n";

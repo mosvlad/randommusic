@@ -6,6 +6,7 @@ namespace App;
 use App\Chat\Guard;
 use App\Chat\Moderation;
 use App\Chat\Repository as ChatRepo;
+use App\Donation\Repository as DonationRepo;
 use App\Http\Request;
 use App\Http\Response;
 use App\Http\View;
@@ -92,6 +93,10 @@ final class Kernel
             ]);
         }
 
+        if ($path === '/api/v1/donation/last') {
+            return self::donationLast($req);
+        }
+
         if ($path === '/api/v1/stats') {
             return self::stats();
         }
@@ -151,21 +156,58 @@ final class Kernel
         $messages = $chat->latest($client, ChatRepo::PAGE);
 
         return Response::html(View::render('home', [
-            'base'        => $req->base,
-            'origin'      => $req->origin(),
-            'initial'     => $initial,
-            'isPermalink' => $trackId !== null,
-            'messages'    => $messages,
-            'lastId'      => $messages === [] ? 0 : (int) end($messages)['id'],
-            'token'       => $guard->issueToken($client),
-            'stats'       => $index->stats(),
-            'online'      => $chat->online(),
+            'base'         => $req->base,
+            'origin'       => $req->origin(),
+            'initial'      => $initial,
+            'isPermalink'  => $trackId !== null,
+            'messages'     => $messages,
+            'lastId'       => $messages === [] ? 0 : (int) end($messages)['id'],
+            'token'        => $guard->issueToken($client),
+            'stats'        => $index->stats(),
+            'online'       => $chat->online(),
+            'lastDonation' => self::lastDonation(),
+            'donateUrl'    => (string) Config::get('DONATIONALERTS_URL', 'https://www.donationalerts.com/r/faust_z'),
             'maxLen'      => Config::int('CHAT_MAX_LEN', 256),
             'maxName'     => Config::int('CHAT_MAX_NAME', 32),
             'assetVer'    => self::assetVersion(),
             'metrikaId'   => (string) Config::get('METRIKA_ID', ''),
             'metrikaWv'   => Config::bool('METRIKA_WEBVISOR', true),
         ]))->withHeader('Content-Security-Policy', self::csp());
+    }
+
+    /**
+     * Последний донат для главной. Ошибку (нет базы, битая запись) глушим:
+     * донаты — украшение, они не должны ронять страницу целиком.
+     */
+    private static function lastDonation(): ?array
+    {
+        try {
+            return (new DonationRepo())->latest();
+        } catch (\Throwable $e) {
+            error_log('[randommusic] lastDonation: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Последний донат для открытой вкладки. ETag по версии ленты донатов:
+     * при отсутствии новых отдаём 304 и не сериализуем ничего.
+     */
+    private static function donationLast(Request $req): Response
+    {
+        try {
+            $repo = new DonationRepo();
+            $etag = '"d' . $repo->version() . '"';
+
+            if ($req->header('If-None-Match') === $etag) {
+                return Response::notModified($etag);
+            }
+
+            return Response::json(['donation' => $repo->latest()])->withHeader('ETag', $etag);
+        } catch (\Throwable $e) {
+            error_log('[randommusic] donation/last: ' . $e->getMessage());
+            return Response::json(['donation' => null]);
+        }
     }
 
     private static function trackRandom(Request $req): Response
@@ -291,11 +333,18 @@ final class Kernel
         $chat  = new ChatRepo();
         $stats = new Stats();
 
+        try {
+            $donations = (new DonationRepo())->total();
+        } catch (\Throwable) {
+            $donations = 0;
+        }
+
         return Response::json([
-            'library'  => $index->stats(),
-            'chat'     => ['messages' => $chat->total(), 'online' => $chat->online()],
-            'playback' => $stats->summary(30),
-            'version'  => self::VERSION,
+            'library'   => $index->stats(),
+            'chat'      => ['messages' => $chat->total(), 'online' => $chat->online()],
+            'playback'  => $stats->summary(30),
+            'donations' => $donations,
+            'version'   => self::VERSION,
         ]);
     }
 
@@ -323,6 +372,12 @@ final class Kernel
             (new ChatRepo())->lastId();
         } catch (\Throwable) {
             $problems[] = 'chat_db';
+        }
+
+        try {
+            (new DonationRepo())->total();
+        } catch (\Throwable) {
+            $problems[] = 'donations_db';
         }
 
         return Response::json([
@@ -528,7 +583,8 @@ final class Kernel
         $docroot = Config::docroot();
         $stamp = 0;
         $files = ['/assets/css/app.css', '/assets/js/app.js',
-                  '/assets/js/player.js', '/assets/js/chat.js'];
+                  '/assets/js/player.js', '/assets/js/chat.js',
+                  '/assets/js/donate.js'];
         foreach ($files as $f) {
             $stamp = max($stamp, (int) @filemtime($docroot . $f));
         }
