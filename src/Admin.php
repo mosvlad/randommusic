@@ -10,6 +10,7 @@ use App\Http\Response;
 use App\Http\View;
 use App\Track\Index as TrackIndex;
 use App\Track\Stats;
+use App\Upload\Repository as UploadRepo;
 
 /**
  * Модераторская. Доступ по токену из .env: либо заголовком, либо
@@ -40,14 +41,23 @@ final class Admin
         $chat  = new ChatRepo();
         $index = new TrackIndex();
 
+        // Не должно ронять дашборд целиком, если загрузки ещё не
+        // смигрированы (свежий деплой без bin/migrate) — просто 0.
+        try {
+            $pendingUploads = (new UploadRepo())->listPending(500);
+        } catch (\Throwable) {
+            $pendingUploads = [];
+        }
+
         return Response::html(View::render('admin/index', [
-            'base'     => $req->base,
-            'messages' => $mod->recent(120),
-            'bans'     => $mod->bans(),
-            'top'      => $mod->topPosters(3600, 15),
-            'library'  => $index->stats(),
-            'chat'     => ['messages' => $chat->total(), 'online' => $chat->online()],
-            'playback' => (new Stats())->summary(30),
+            'base'           => $req->base,
+            'messages'       => $mod->recent(120),
+            'bans'           => $mod->bans(),
+            'top'            => $mod->topPosters(3600, 15),
+            'library'        => $index->stats(),
+            'chat'           => ['messages' => $chat->total(), 'online' => $chat->online()],
+            'playback'       => (new Stats())->summary(30),
+            'pendingUploads' => count($pendingUploads),
         ]))->withHeader('Cache-Control', 'no-store')
            ->withHeader('X-Robots-Tag', 'noindex, nofollow');
     }

@@ -7,6 +7,7 @@
  * @var array  $library
  * @var array  $chat
  * @var array  $playback
+ * @var int    $pendingUploads
  */
 
 use App\Http\View;
@@ -29,6 +30,9 @@ $dt = static fn(int $ts): string => gmdate('d.m H:i', $ts);
   .card { background: #232323; border: 1px solid #333; border-radius: 6px; padding: .75rem 1rem; }
   .card b { display: block; font-size: 1.7rem; color: var(--accent); line-height: 1.1; }
   .card span { font-size: .85rem; color: #999; }
+  .card--alert { border-color: var(--accent); }
+  .mini--alert { background: var(--accent); color: #fff; }
+  .mini--alert:hover { background: var(--accent-hover); }
   table { width: 100%; border-collapse: collapse; font-size: .9rem; }
   th, td { padding: .4rem .5rem; text-align: left; border-bottom: 1px solid #2e2e2e; vertical-align: top; }
   th { color: #999; font-weight: 400; }
@@ -57,9 +61,15 @@ $dt = static fn(int $ts): string => gmdate('d.m H:i', $ts);
     <div class="card"><b><?= (int) $chat['online'] ?></b><span>онлайн сейчас</span></div>
     <div class="card"><b><?= (int) $playback['plays'] ?></b><span>прослушиваний за 30 дн.</span></div>
     <div class="card"><b><?= (int) $playback['skips'] ?></b><span>из них скипов</span></div>
+    <div class="card<?= $pendingUploads > 0 ? ' card--alert' : '' ?>">
+      <b><?= (int) $pendingUploads ?></b><span>загрузок на модерации</span>
+    </div>
   </div>
 
   <div class="toolbar">
+    <a class="mini<?= $pendingUploads > 0 ? ' mini--alert' : '' ?>" href="<?= $e($base) ?>/admin/uploads">
+      Модерация загрузок<?= $pendingUploads > 0 ? ' (' . (int) $pendingUploads . ')' : '' ?>
+    </a>
     <form method="post" action="<?= $e($base) ?>/admin" class="inline">
       <input type="hidden" name="do" value="rescan">
       <button class="mini" type="submit">Пересканировать медиатеку</button>
