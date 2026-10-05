@@ -220,6 +220,16 @@ CSP расширяется автоматически, когда счётчик
 4. `bin/donations-auth '<code-или-весь-адрес>'` — токены сохранятся в
    `donations.sqlite`.
 5. `bin/donations-poll --verbose` — проверить, что донаты забираются.
+6. **Установить таймер** — файлы в `deploy/systemd/` только шаблоны,
+   сами по себе они ничего не опрашивают:
+   ```bash
+   cp deploy/systemd/randommusic-donations.{service,timer} ~/.config/systemd/user/
+   systemctl --user daemon-reload
+   systemctl --user enable --now randommusic-donations.timer
+   ```
+   Без этого шага донаты копятся на стороне DonationAlerts и не
+   попадают на сайт, пока кто-нибудь не запустит `bin/donations-poll`
+   вручную. Проверить: `systemctl --user list-timers randommusic-donations.timer`.
 
 Access-токен DonationAlerts живёт ~20 лет; при 401 `donations-poll` сам
 обновляет пару токенов по `refresh_token` и пишет их в базу, `.env` при
