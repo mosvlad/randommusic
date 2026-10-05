@@ -15,6 +15,15 @@ DirectoryIndex index.php
     RewriteRule ^messages\.json$ index.php [L,QSA]
     RewriteRule ^getfile\.php$   index.php [L,QSA]
 
+    # Страница загрузки трека живёт на /upload — это ещё и имя каталога
+    # медиатеки (upload/ с файлами из телеграм-бота и от модерации).
+    # Общее правило ниже пропускает существующие каталоги (!-d), поэтому
+    # без этой строки Apache сам пытался бы отдать upload/ как каталог —
+    # и падал в 403, потому что Options -Indexes запрещает листинг.
+    # Файлы внутри (/upload/<name>.mp3) этим правилом не затрагиваются:
+    # $ привязан к концу адреса, совпадает только ровно /upload и /upload/.
+    RewriteRule ^upload/?$ index.php [L,QSA]
+
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteRule ^ index.php [L,QSA]
@@ -92,6 +101,6 @@ DirectoryIndex index.php
 # --------------------------------------------------------------------------
 # Ничего лишнего наружу
 # --------------------------------------------------------------------------
-<FilesMatch "^(\.env.*|\.git.*|\.htaccess|composer\.(json|lock))$">
+<FilesMatch "^(\.env.*|\.git.*|\.htaccess|\.user\.ini|composer\.(json|lock))$">
     Require all denied
 </FilesMatch>
