@@ -20,7 +20,7 @@ say() { [ "$VERBOSE" = "--verbose" ] && echo "$@" || true; }
 
 # .backup у sqlite3 снимает согласованный снимок на живой базе,
 # не мешая ни читателям, ни писателям
-for db in chat tracks; do
+for db in chat tracks donations auth uploads; do
   src="$APP/var/db/$db.sqlite"
   [ -f "$src" ] || continue
   out="$DEST/$db-$STAMP.sqlite"

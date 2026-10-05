@@ -61,3 +61,42 @@ if ($quiet) {
            . "(в ротации оставлены, автоматически не трогаем)\n";
     }
 }
+
+/*
+ * Атрибуция одобренных загрузок.
+ *
+ * Upload\Service::approve() копирует файл в upload/ и запускает этот
+ * скрипт заново, но асинхронно (nohup &) — синхронно схватить id новой
+ * записи tracks оттуда нельзя. Поэтому находим его здесь, сразу после
+ * собственного прохода Scanner: путь уже известен (upload/<stored_name>),
+ * остаётся только сопоставить. Условие "approved_track_id IS NULL"
+ * делает шаг идемпотентным и самовосстанавливающимся — если по какой-то
+ * причине бэкфилл не отработал сразу, следующий проход (хоть ручной,
+ * хоть по таймеру раз в 15 минут) досчитает его.
+ */
+Db::migrate('uploads');
+$pending = Db::get('uploads');
+$tracksDb = Db::get('tracks');
+
+$rows = $pending->query(
+    "SELECT id, stored_name, user_id, username FROM pending_uploads
+     WHERE status = 'approved' AND approved_track_id IS NULL"
+)->fetchAll();
+
+foreach ($rows as $r) {
+    $path = '/upload/' . $r['stored_name'];
+    $find = $tracksDb->prepare('SELECT id FROM tracks WHERE path = ?');
+    $find->execute([$path]);
+    $trackId = $find->fetchColumn();
+
+    if ($trackId === false) {
+        continue;   // файл ещё не подхвачен этим же проходом — досчитается в следующий раз
+    }
+
+    $tracksDb->prepare('UPDATE tracks SET uploader_user_id = ?, uploader_username = ? WHERE id = ?')
+        ->execute([$r['user_id'], $r['username'], $trackId]);
+    $pending->prepare('UPDATE pending_uploads SET approved_track_id = ? WHERE id = ?')
+        ->execute([(int) $trackId, $r['id']]);
+
+    $log("Атрибуция: трек #$trackId -> {$r['username']}");
+}

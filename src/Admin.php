@@ -21,17 +21,9 @@ final class Admin
 
     public static function handle(Request $req): Response
     {
-        $token = self::token($req);
-
-        if (!Moderation::checkToken($token)) {
-            return Response::html(View::render('admin/login', ['base' => $req->base]), 401)
-                ->withHeader('Cache-Control', 'no-store');
-        }
-
-        // Токен пришёл в URL — переложим в cookie, чтобы не светился в логах
-        if (($req->get('token') ?? '') !== '') {
-            self::setCookie($token);
-            return Response::redirect($req->base . '/admin');
+        $guard = self::requireAuth($req);
+        if ($guard !== null) {
+            return $guard;
         }
 
         $mod = new Moderation();
@@ -58,6 +50,31 @@ final class Admin
             'playback' => (new Stats())->summary(30),
         ]))->withHeader('Cache-Control', 'no-store')
            ->withHeader('X-Robots-Tag', 'noindex, nofollow');
+    }
+
+    /**
+     * Проверка доступа, общая для /admin и /admin/uploads (AdminUploads).
+     *
+     * Возвращает Response, если вызывающий код должен сразу его отдать —
+     * страница логина при неверном токене, либо редирект после переноса
+     * токена из URL в cookie; null — доступ подтверждён, можно продолжать.
+     */
+    public static function requireAuth(Request $req): ?Response
+    {
+        $token = self::token($req);
+
+        if (!Moderation::checkToken($token)) {
+            return Response::html(View::render('admin/login', ['base' => $req->base]), 401)
+                ->withHeader('Cache-Control', 'no-store');
+        }
+
+        // Токен пришёл в URL — переложим в cookie, чтобы не светился в логах
+        if (($req->get('token') ?? '') !== '') {
+            self::setCookie($token);
+            return Response::redirect($req->base . $req->path);
+        }
+
+        return null;
     }
 
     private static function action(Request $req, Moderation $mod): Response

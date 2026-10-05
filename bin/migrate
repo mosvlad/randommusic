@@ -6,7 +6,7 @@ require __DIR__ . '/../src/bootstrap.php';
 
 use App\Support\Db;
 
-foreach (['tracks', 'chat', 'donations'] as $name) {
+foreach (['tracks', 'chat', 'donations', 'auth', 'uploads'] as $name) {
     $applied = Db::migrate($name);
     if ($applied === []) {
         echo "$name: актуальна\n";

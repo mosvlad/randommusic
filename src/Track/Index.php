@@ -13,7 +13,7 @@ use PDO;
  */
 final class Index
 {
-    private const COLUMNS = 'id, path, artist, title, album, year, genre, duration, bitrate, loudness, source, added_at';
+    private const COLUMNS = 'id, path, artist, title, album, year, genre, duration, bitrate, loudness, source, added_at, uploader_username';
 
     private PDO $db;
 
@@ -203,6 +203,8 @@ final class Index
             'duration' => $row['duration'] !== null ? (float) $row['duration'] : null,
             'bitrate'  => $row['bitrate'] !== null ? (int) $row['bitrate'] : null,
             'loudness' => $row['loudness'] !== null ? (float) $row['loudness'] : null,
+            // Заполняется только для треков, прошедших модерацию загрузок
+            'uploadedBy' => $row['uploader_username'] ?: null,
         ];
     }
 

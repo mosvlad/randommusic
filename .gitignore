@@ -7,6 +7,7 @@ var/db/*.sqlite-wal
 var/db/*.sqlite-shm
 var/cache/*
 var/log/*
+var/uploads/*
 !var/db/.gitkeep
 !var/cache/.gitkeep
 !var/log/.gitkeep

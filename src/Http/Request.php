@@ -13,14 +13,17 @@ final class Request
     public readonly array $body;
     /** Префикс, по которому смонтировано приложение ('' или '/v2'). */
     public readonly string $base;
+    /** @var array<string,array<string,mixed>> сырой $_FILES */
+    public readonly array $files;
 
-    private function __construct(string $method, string $path, array $query, array $body, string $base)
+    private function __construct(string $method, string $path, array $query, array $body, string $base, array $files)
     {
         $this->method = $method;
         $this->path   = $path;
         $this->query  = $query;
         $this->body   = $body;
         $this->base   = $base;
+        $this->files  = $files;
     }
 
     public static function capture(): self
@@ -58,7 +61,26 @@ final class Request
             }
         }
 
-        return new self($method, $path, $_GET, $body, $base);
+        return new self($method, $path, $_GET, $body, $base, $_FILES);
+    }
+
+    /**
+     * Загруженный файл по имени поля, либо null — поля не было,
+     * форма отправлена без JS (нет multipart), или само поле пустое.
+     *
+     * @return array{name:string,type:string,tmp_name:string,error:int,size:int}|null
+     */
+    public function file(string $key): ?array
+    {
+        $f = $this->files[$key] ?? null;
+        if (!is_array($f) || !isset($f['error'])) {
+            return null;
+        }
+        if ((int) $f['error'] === UPLOAD_ERR_NO_FILE) {
+            return null;
+        }
+
+        return $f;
     }
 
     public function get(string $key, ?string $default = null): ?string

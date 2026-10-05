@@ -9,10 +9,12 @@ declare(strict_types=1);
 
 require __DIR__ . '/../src/bootstrap.php';
 
+use App\Auth\Repository as AuthRepo;
 use App\Chat\Repository as ChatRepo;
 use App\Support\Cache;
 use App\Support\Db;
 use App\Track\Stats;
+use App\Upload\Repository as UploadRepo;
 
 $quiet = in_array('--quiet', array_slice($argv, 1), true);
 $say = static function (string $m) use ($quiet): void {
@@ -25,6 +27,17 @@ $say = static function (string $m) use ($quiet): void {
 (new ChatRepo())->prune();
 $say('Служебные таблицы чата подчищены');
 
+// Просроченные сессии и окна антифлуда регистрации/входа
+Db::migrate('auth');
+(new AuthRepo())->prune();
+$say('Просроченные сессии подчищены');
+
+// Старые решённые загрузки (сам файл к этому моменту уже удалён — либо
+// при одобрении, либо при отклонении) и окно антифлуда загрузок
+Db::migrate('uploads');
+(new UploadRepo())->prune();
+$say('Старые записи о загрузках подчищены');
+
 // Веса ротации по доле ранних скипов
 $updated = (new Stats())->recomputeWeights();
 $say("Веса пересчитаны для треков: $updated");
@@ -35,7 +48,7 @@ $tracks->prepare('DELETE FROM plays WHERE ts < ?')->execute([time() - 180 * 8640
 $say('Старая статистика прослушиваний удалена');
 
 // WAL растёт, если его не подрезать
-foreach (['tracks', 'chat'] as $name) {
+foreach (['tracks', 'chat', 'donations', 'auth', 'uploads'] as $name) {
     Db::get($name)->exec('PRAGMA wal_checkpoint(TRUNCATE)');
     Db::get($name)->exec('PRAGMA optimize');
 }
