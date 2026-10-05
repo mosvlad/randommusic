@@ -125,6 +125,7 @@ if (chatRoot) {
       token: boot.token || '',
       online: boot.online || 0,
       base: boot.base || '',
+      registered: !!boot.registered,
       getTrackId: () => (player ? player.trackId : null),
     });
   } catch (err) {
@@ -139,6 +140,15 @@ if (player && chat) initHotkeys(player, chat);
 import(`./donate.js${q}`)
   .then(({ initDonate }) => initDonate({ base: boot.base || '', last: boot.donation || null }))
   .catch((err) => console.error('[donate]', err));
+
+/* --- Вход / регистрация / загрузка трека — в модалке --------------------
+   <dialog id="auth-modal"> в разметке есть всегда, но без JS его некому
+   открыть (showModal() никто не вызовет) — ссылки просто ведут на
+   полноценные страницы /login, /register, /upload. */
+
+import(`./modal.js${q}`)
+  .then(({ initAuthModal }) => initAuthModal())
+  .catch((err) => console.error('[modal]', err));
 
 /* --- Аналитика ------------------------------------------------------------
    Счётчик грузится только если задан METRIKA_ID, и после того, как плеер и

@@ -16,6 +16,7 @@
  * @var bool       $metrikaWv
  * @var array|null $lastDonation
  * @var string     $donateUrl
+ * @var array|null $user
  */
 
 use App\Http\View;
@@ -78,8 +79,37 @@ $canonical = $origin . $base . ($isPermalink && $initial ? '/t/' . $initial['id'
 
 <div class="container">
 
+  <!-- ------------------------------------------------------------------ -->
+  <div class="topbar">
+    <a class="topbar__brand" href="<?= $e($base) ?>/">RANDOM MUSIC</a>
+    <nav class="topbar__nav">
+      <?php if ($user): ?>
+        <span class="topbar__user">Привет, <strong><?= $e($user['username']) ?></strong></span>
+        <a class="button topbar__upload" href="<?= $e($base) ?>/upload" data-modal>Upload</a>
+        <form method="post" action="<?= $e($base) ?>/logout" class="topbar__logout">
+          <button type="submit" class="link-btn">Выйти</button>
+        </form>
+      <?php else: ?>
+        <a class="topbar__link" href="<?= $e($base) ?>/login" data-modal>Войти</a>
+        <a class="button topbar__cta" href="<?= $e($base) ?>/register" data-modal>Регистрация</a>
+      <?php endif; ?>
+    </nav>
+  </div>
+
+  <?php /* Модалка логина/регистрации/загрузки. Контент — настоящая
+           страница /login, /register или /upload, подтянутая fetch'ем
+           и вырезанная по .auth-card: без JS те же ссылки ведут на
+           полноценные страницы, форма там работает один в один. */ ?>
+  <dialog class="modal" id="auth-modal">
+    <button type="button" class="modal__close" aria-label="Закрыть">×</button>
+    <div class="modal__scroll">
+      <div class="modal__body"></div>
+    </div>
+  </dialog>
+
   <header class="site-head">
     <h1 class="site-title">Random music</h1>
+
     <div class="site-intro">
       <p>Привет, друг. На этом сайте ты можешь слушать случайную музыку и общаться.</p>
       <p>Вопросы и предложения — в чатик в телеге, ссылка внизу.</p>
@@ -162,6 +192,7 @@ $canonical = $origin . $base . ($isPermalink && $initial ? '/t/' . $initial['id'
         Показать историю
       </button>
       <span id="player-status" role="status" aria-live="polite"></span>
+      <span id="np-uploader"<?= ($initial && !empty($initial['uploadedBy'])) ? '' : ' hidden' ?>>Загрузил: <?= $e($initial['uploadedBy'] ?? '') ?></span>
       <?php if ($initial): ?>
         <a id="share-link" href="<?= $e($base) ?>/t/<?= (int) $initial['id'] ?>">ссылка на трек</a>
       <?php endif; ?>
@@ -211,7 +242,7 @@ $canonical = $origin . $base . ($isPermalink && $initial ? '/t/' . $initial['id'
       <?php foreach ($messages as $m): ?>
         <li class="msg" data-id="<?= (int) $m['id'] ?>">
           <div class="msg__head">
-            <span class="msg__name"><?= $e($m['name']) ?></span>
+            <span class="msg__name<?= !empty($m['registered']) ? ' msg__name--registered' : '' ?>"><?= $e($m['name']) ?><?php if (!empty($m['registered'])): ?><span class="msg__badge" title="Зарегистрированный пользователь">✓</span><?php endif; ?></span>
             <time class="msg__time" datetime="<?= $e(gmdate('c', (int) $m['time'])) ?>"><?= $e(gmdate('H:i', (int) $m['time'])) ?></time>
           </div>
           <div class="msg__body"><?= $e($m['content']) ?></div>
@@ -233,8 +264,17 @@ $canonical = $origin . $base . ($isPermalink && $initial ? '/t/' . $initial['id'
         </label>
         <label>
           <span class="visually-hidden">Имя</span>
-          <input class="field" type="text" id="chat-name" name="name" autocomplete="nickname"
-                 maxlength="<?= (int) $maxName ?>" value="Anonymous" placeholder="Имя">
+          <?php if ($user): ?>
+            <?php /* Вошедший не выбирает имя: решает сервер по сессии
+                     (см. Kernel::chatPost) — readonly здесь только для
+                     UI, подмена через devtools ничего не даст. */ ?>
+            <input class="field field--locked" type="text" id="chat-name" name="name"
+                   value="<?= $e($user['username']) ?>" readonly
+                   title="Вы вошли как «<?= $e($user['username']) ?>» — имя в чате не меняется">
+          <?php else: ?>
+            <input class="field" type="text" id="chat-name" name="name" autocomplete="nickname"
+                   maxlength="<?= (int) $maxName ?>" value="Anonymous" placeholder="Имя">
+          <?php endif; ?>
         </label>
       </div>
 
@@ -268,6 +308,7 @@ $canonical = $origin . $base . ($isPermalink && $initial ? '/t/' . $initial['id'
     'token'   => $token,
     'online'  => $online,
     'donation' => $lastDonation,
+    'registered' => $user !== null,
     'metrika' => $metrikaId !== '' ? (int) $metrikaId : null,
     'metrikaWv' => $metrikaWv,
 ]) ?></script>

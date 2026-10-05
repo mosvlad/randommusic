@@ -112,6 +112,7 @@ a:hover, a:focus-visible { color: var(--accent-hover); }
 
 .container {
   width: var(--col);
+  min-width: 0;
   margin: 0 auto;
   display: grid;
   gap: 1.75rem;
@@ -128,6 +129,73 @@ a:hover, a:focus-visible { color: var(--accent-hover); }
   letter-spacing: 0.01em;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
 }
+
+/* Топ-бар: вход/регистрация, а после входа — имя и кнопка Upload.
+   Отдельная панель над заголовком, тот же язык, что у .player/.donate:
+   полупрозрачная подложка на фото, а не голые ссылки поверх картинки. */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.55rem 0.9rem;
+  background: var(--panel);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  font-size: 0.85rem;
+}
+
+.topbar__brand {
+  flex: none;
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  color: #2b2b2b;
+  text-decoration: none;
+}
+.topbar__brand:hover { color: var(--accent); }
+
+.topbar__nav {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.topbar__link { color: var(--panel-dim); text-decoration: underline; }
+.topbar__link:hover { color: var(--accent); }
+
+.topbar__user { color: #2b2b2b; }
+.topbar__user strong { color: var(--accent); }
+
+.topbar__cta,
+.topbar__upload {
+  padding: 0.35rem 0.9rem;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+}
+
+.topbar__logout { display: inline; }
+
+@media (max-width: 480px) {
+  .topbar { flex-wrap: wrap; justify-content: center; text-align: center; }
+}
+
+/* Кнопка, выглядящая как ссылка — для POST-форм вроде выхода из аккаунта */
+.link-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: var(--font);
+  font-size: inherit;
+  color: var(--panel-dim);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.link-btn:hover { color: var(--accent); }
 
 .site-intro {
   margin-top: 0.85rem;
@@ -443,6 +511,16 @@ a.button:focus-visible { color: #fff; }
 
 .player-extra #share-link { flex: none; }
 
+.player-extra #np-uploader {
+  flex: none;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 40%;
+}
+.player-extra #np-uploader[hidden] { display: none; }
+
 .player-extra a { color: var(--panel-dim); }
 .player-extra a:hover { color: var(--accent); }
 
@@ -658,6 +736,24 @@ a.button:focus-visible { color: #fff; }
 }
 
 .msg__name { font-weight: 700; color: var(--msg-color, #555); overflow-wrap: anywhere; }
+
+/* Бейдж зарегистрированного — цвет ника оставляем как есть (это его
+   индивидуальный хеш-цвет, по нему в чате различают собеседников),
+   а «аккаунт подтверждён» показываем отдельным значком, не перекраской. */
+.msg__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin-left: 0.3rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.62rem;
+  line-height: 1;
+  vertical-align: middle;
+}
 .msg__time { font-variant-numeric: tabular-nums; }
 .msg__src {
   font-size: 0.72rem;
@@ -696,6 +792,10 @@ a.button:focus-visible { color: #fff; }
 
 .field {
   width: 100%;
+  min-width: 0;        /* в grid/flex-ячейке width:100% не мешает ей требовать
+                           больше места под содержимое; актуально для
+                           <input type="file"> — см. .auth-card ниже */
+  max-width: 100%;
   padding: 0.6rem 0.7rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -703,6 +803,22 @@ a.button:focus-visible { color: #fff; }
   color: #333;
   font-family: var(--font);
   font-size: 0.95rem;
+}
+
+/* Имя вошедшего в чате — не его выбор, поле только для вида (решает
+   сервер). readonly уже не даёт его трогать, цвет — чтобы это было видно
+   сразу, а не только по курсору "not-allowed" при попытке кликнуть. */
+.field--locked {
+  background: rgba(0, 0, 0, 0.08);
+  color: #555;
+  cursor: not-allowed;
+}
+
+/* <input type="file"> — самый частый источник переполнения: его
+   внутренний «Выберите файл» + текст не ужимается сам по себе, и без
+   явного min-width:0 раздувал .auth-card на всю видимую клавиатуру. */
+input[type="file"].field {
+  padding: 0.45rem 0.5rem;
 }
 
 .field::placeholder { color: #999; }
@@ -784,6 +900,182 @@ a.button:focus-visible { color: #fff; }
 }
 
 .theme-toggle:hover { color: var(--accent); }
+
+/* --------------------------------------------------------------------------
+   Модалка логина/регистрации/загрузки. Содержимое — настоящая страница
+   /login, /register или /upload, вырезанная по .auth-card (см. modal.js);
+   без JS те же ссылки просто открывают её целиком — вид тот же, разница
+   только в рамке диалога вокруг.
+   -------------------------------------------------------------------------- */
+
+/* padding:0 — его даёт внутренний .modal__scroll, иначе прокрутка
+   обрезала бы кнопку закрытия (она нарочно высовывается за край). */
+dialog.modal {
+  padding: 0;
+  margin: auto;
+  width: min(26rem, calc(100vw - 2rem));
+  max-width: 100%;
+  border: none;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  box-shadow: var(--shadow);
+  overflow: visible;
+}
+
+dialog.modal::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+}
+
+/* Пока модалка открыта, фон не должен ещё и прокручиваться своим колесом */
+body:has(dialog.modal[open]) { overflow: hidden; }
+
+/* Прокрутка — только здесь, не на самом <dialog>: иначе обрезало бы
+   .modal__close, которая нарочно стоит с отрицательным отступом за
+   границей диалога. overflow-x:hidden — не «на всякий случай», а
+   настоящий предохранитель от переполнения по ширине (см. .field ниже). */
+.modal__scroll {
+  max-height: 88vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-radius: var(--radius-lg);
+}
+
+.modal__body { position: relative; min-width: 0; }
+
+/* Внутри модалки карточка уже не центрирует сама себя на всю страницу —
+   это делает <dialog> — и подложка/тень ей не нужны: их даёт сам диалог. */
+.modal__body .auth-card {
+  margin: 0;
+  max-width: none;
+  box-shadow: none;
+}
+
+.modal__close {
+  position: absolute;
+  top: -0.65rem;
+  right: -0.65rem;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  z-index: 1;
+}
+.modal__close:hover { background: var(--accent-hover); }
+
+.modal__loading {
+  margin: 0;
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: var(--panel-dim);
+  background: var(--panel);
+  border-radius: var(--radius-lg);
+}
+
+@media (max-width: 480px) {
+  dialog.modal { width: calc(100vw - 1.5rem); }
+}
+
+/* --------------------------------------------------------------------------
+   Аккаунты: регистрация, вход, загрузка трека — отдельные страницы,
+   один и тот же вид карточки на панели, что у плеера/доната.
+   -------------------------------------------------------------------------- */
+
+/* Ссылка назад — здесь нет панели под ней, фон тёмное фото, поэтому
+   цвет берём как у .site-foot, а не как у .topbar__brand (тот тёмный,
+   рассчитан на светлую подложку топ-бара). */
+.auth-card__back {
+  max-width: 26rem;
+  margin: 1.5rem auto 0;
+  text-align: center;
+}
+.auth-card__back .topbar__brand {
+  color: var(--text-dim);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+.auth-card__back .topbar__brand:hover { color: var(--accent); }
+
+.auth-card {
+  max-width: 26rem;
+  min-width: 0;
+  margin: 2rem auto;
+  padding: 1.25rem 1.25rem 1.1rem;
+  background: var(--panel);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  color: var(--panel-text);
+  display: grid;
+  gap: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.auth-card h1 {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 400;
+  text-align: center;
+  color: #2b2b2b;
+}
+
+/* min-width:0 на .auth-card, form и label — у ячеек grid/flex по
+   умолчанию min-width:auto («не уже содержимого»), а содержимое
+   <input type="file"> шире, чем кажется. Без этого ряда правил форма
+   раздувала всю карточку вбок, а в диалоге это оборачивалось
+   горизонтальной прокруткой. */
+.auth-card form { display: grid; gap: 0.6rem; min-width: 0; }
+
+.auth-card label {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+  font-size: 0.85rem;
+  color: var(--panel-dim);
+}
+
+.auth-card__status {
+  min-height: 1.2em;
+  font-size: 0.9rem;
+  text-align: center;
+}
+.auth-card__status[data-kind="error"] { color: var(--accent); }
+.auth-card__status[data-kind="ok"]    { color: #2e7d32; }
+
+.auth-card__links { text-align: center; font-size: 0.9rem; color: var(--panel-dim); }
+.auth-card__links a { color: var(--accent); }
+
+.auth-card__hint { font-size: 0.8rem; color: var(--panel-dim); }
+
+/* Список «мои загрузки» на странице /upload */
+.upload-list { display: grid; gap: 0; font-size: 0.9rem; margin: 0; padding: 0; list-style: none; }
+.upload-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+.upload-list li:last-child { border-bottom: none; }
+.upload-list .upload-list__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.status-pill {
+  flex: none;
+  font-size: 0.78rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.status-pill--pending  { background: #fff3cd; color: #7a5b00; }
+.status-pill--approved { background: #d4edda; color: #1e5e27; }
+.status-pill--rejected { background: #f8d7da; color: #7a1c24; }
 
 /* --------------------------------------------------------------------------
    Мелочи

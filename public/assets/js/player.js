@@ -68,6 +68,7 @@ export class Player {
     this.elTitle = root.querySelector('#np-title');
     this.elArtist = root.querySelector('#np-artist');
     this.elMeta = root.querySelector('#np-meta');
+    this.elUploader = root.querySelector('#np-uploader');
     this.elCur = root.querySelector('#time-current');
     this.elDur = root.querySelector('#time-total');
 
@@ -285,6 +286,11 @@ export class Player {
 
     this.elDur.textContent = fmtTime(track.duration || 0);
     this.elCur.textContent = '0:00';
+
+    if (this.elUploader) {
+      this.elUploader.textContent = track.uploadedBy ? `Загрузил: ${track.uploadedBy}` : '';
+      this.elUploader.hidden = !track.uploadedBy;
+    }
     this.#setProgress(0);
     if (this.buffer) this.buffer.style.width = '0%';
 

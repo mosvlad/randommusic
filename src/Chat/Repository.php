@@ -33,7 +33,7 @@ final class Repository
     public function since(int $sinceId, string $client, int $limit = self::PAGE): array
     {
         $stmt = $this->db->prepare(
-            'SELECT id, ts, name, content, track_id, source, shadow, client
+            'SELECT id, ts, name, content, track_id, source, shadow, client, user_id
              FROM messages
              WHERE id > :since AND deleted = 0 AND (shadow = 0 OR client = :client)
              ORDER BY id ASC LIMIT :limit'
@@ -54,7 +54,7 @@ final class Repository
     public function latest(string $client, int $limit = self::PAGE): array
     {
         $stmt = $this->db->prepare(
-            'SELECT id, ts, name, content, track_id, source, shadow, client
+            'SELECT id, ts, name, content, track_id, source, shadow, client, user_id
              FROM messages
              WHERE deleted = 0 AND (shadow = 0 OR client = :client)
              ORDER BY id DESC LIMIT :limit'
@@ -74,7 +74,7 @@ final class Repository
     public function before(int $beforeId, string $client, int $limit = self::PAGE): array
     {
         $stmt = $this->db->prepare(
-            'SELECT id, ts, name, content, track_id, source, shadow, client
+            'SELECT id, ts, name, content, track_id, source, shadow, client, user_id
              FROM messages
              WHERE id < :before AND deleted = 0 AND (shadow = 0 OR client = :client)
              ORDER BY id DESC LIMIT :limit'
@@ -87,19 +87,25 @@ final class Repository
         return array_map([$this, 'toDto'], array_reverse($stmt->fetchAll()));
     }
 
+    /**
+     * @param int|null $userId Аккаунт автора, если сообщение отправлено
+     *                         вошедшим пользователем — для бейджа «зарегистрирован»
+     *                         в чате. Решает сервер по сессии, не клиент.
+     */
     public function add(
         string $name,
         string $content,
         string $client,
         ?int $trackId = null,
         bool $shadow = false,
-        string $source = 'web'
+        string $source = 'web',
+        ?int $userId = null
     ): int {
         $stmt = $this->db->prepare(
-            'INSERT INTO messages (ts, name, content, client, track_id, shadow, source)
-             VALUES (?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO messages (ts, name, content, client, track_id, shadow, source, user_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
         );
-        $stmt->execute([time(), $name, $content, $client, $trackId, $shadow ? 1 : 0, $source]);
+        $stmt->execute([time(), $name, $content, $client, $trackId, $shadow ? 1 : 0, $source, $userId]);
         $this->bumpVersion();
 
         return (int) $this->db->lastInsertId();
@@ -196,12 +202,15 @@ final class Repository
     private function toDto(array $row): array
     {
         return [
-            'id'      => (int) $row['id'],
-            'time'    => (int) $row['ts'],
-            'name'    => (string) $row['name'],
-            'content' => (string) $row['content'],
-            'track'   => $row['track_id'] !== null ? (int) $row['track_id'] : null,
-            'source'  => (string) $row['source'],
+            'id'         => (int) $row['id'],
+            'time'       => (int) $row['ts'],
+            'name'       => (string) $row['name'],
+            'content'    => (string) $row['content'],
+            'track'      => $row['track_id'] !== null ? (int) $row['track_id'] : null,
+            'source'     => (string) $row['source'],
+            // Бейдж в чате: сообщение отправлено вошедшим в аккаунт,
+            // имя не могло быть подделано — сервер подставил его сам.
+            'registered' => $row['user_id'] !== null,
         ];
     }
 }

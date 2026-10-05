@@ -64,9 +64,12 @@ function renderBody(el, text) {
 }
 
 export class Chat {
-  constructor(root, { lastId = 0, token = '', online = 0, base = '', getTrackId = () => null } = {}) {
+  constructor(root, { lastId = 0, token = '', online = 0, base = '', registered = false, getTrackId = () => null } = {}) {
     this.root = root;
     this.base = base;
+    // Вошедший: имя в чате — не его выбор (см. readonly #chat-name и
+    // Kernel::chatPost, который решает по сессии, что бы ни пришло в поле).
+    this.registered = registered;
     this.log = root.querySelector('#chat-log');
     this.form = root.querySelector('#chat-form');
     this.inputContent = root.querySelector('#chat-content');
@@ -195,6 +198,15 @@ export class Chat {
     name.textContent = m.name;
     name.style.setProperty('--msg-color', nameColor(m.name));
 
+    if (m.registered) {
+      name.classList.add('msg__name--registered');
+      const badge = document.createElement('span');
+      badge.className = 'msg__badge';
+      badge.title = 'Зарегистрированный пользователь';
+      badge.textContent = '✓';
+      name.append(badge);
+    }
+
     const time = document.createElement('time');
     time.className = 'msg__time';
     time.dateTime = new Date(m.time * 1000).toISOString();
@@ -254,6 +266,7 @@ export class Chat {
     });
 
     this.inputName.addEventListener('change', () => {
+      if (this.inputName.readOnly) return;   // вошедший — поле не его
       try {
         localStorage.setItem(LS.name, this.inputName.value.trim());
       } catch {}
@@ -330,7 +343,10 @@ export class Chat {
   }
 
   #pending(name, content) {
-    const node = this.#node({ id: -Date.now(), time: Math.floor(Date.now() / 1000), name, content, source: 'web' });
+    const node = this.#node({
+      id: -Date.now(), time: Math.floor(Date.now() / 1000), name, content, source: 'web',
+      registered: this.registered,
+    });
     node.classList.add('msg--pending');
     node.removeAttribute('data-id');
     this.log.append(node);
@@ -387,6 +403,7 @@ export class Chat {
   }
 
   #restoreName() {
+    if (this.inputName.readOnly) return;   // сервер уже подставил имя аккаунта
     try {
       const saved = localStorage.getItem(LS.name);
       if (saved) this.inputName.value = saved;

@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace App;
 
+use App\Auth\Guard as AuthGuard;
+use App\Auth\Repository as AuthRepo;
 use App\Chat\Guard;
 use App\Chat\Moderation;
 use App\Chat\Repository as ChatRepo;
@@ -15,6 +17,9 @@ use App\Support\Client;
 use App\Support\Config;
 use App\Track\Index as TrackIndex;
 use App\Track\Stats;
+use App\Upload\Guard as UploadGuard;
+use App\Upload\Repository as UploadRepo;
+use App\Upload\Service as UploadService;
 
 /**
  * Единая точка входа и маршрутизация.
@@ -105,6 +110,24 @@ final class Kernel
             return self::health();
         }
 
+        // --- Аккаунты и загрузки --------------------------------------------
+        if ($path === '/register') {
+            return $req->method === 'POST' ? self::registerPost($req) : self::registerPage($req);
+        }
+
+        if ($path === '/login') {
+            return $req->method === 'POST' ? self::loginPost($req) : self::loginPage($req);
+        }
+
+        if ($path === '/logout') {
+            (new AuthRepo())->logout();
+            return Response::redirect($req->base . '/');
+        }
+
+        if ($path === '/upload') {
+            return $req->method === 'POST' ? self::uploadPost($req) : self::uploadPage($req);
+        }
+
         // --- Служебное -------------------------------------------------------
         // Отдаём динамически, а не файлами: sitemap требует абсолютных URL,
         // а домен в статике тихо сломал бы переезд на другой адрес.
@@ -128,6 +151,11 @@ final class Kernel
         }
 
         // --- Админка ---------------------------------------------------------
+        // Модерация загрузок — раньше общего /admin/*, это отдельная страница
+        if ($path === '/admin/uploads' || str_starts_with($path, '/admin/uploads/')) {
+            return AdminUploads::handle($req);
+        }
+
         if ($path === '/admin' || str_starts_with($path, '/admin/')) {
             return Admin::handle($req);
         }
@@ -167,6 +195,7 @@ final class Kernel
             'online'       => $chat->online(),
             'lastDonation' => self::lastDonation(),
             'donateUrl'    => (string) Config::get('DONATIONALERTS_URL', 'https://www.donationalerts.com/r/faust_z'),
+            'user'        => self::currentUserSafe(),
             'maxLen'      => Config::int('CHAT_MAX_LEN', 256),
             'maxName'     => Config::int('CHAT_MAX_NAME', 32),
             'assetVer'    => self::assetVersion(),
@@ -208,6 +237,179 @@ final class Kernel
             error_log('[randommusic] donation/last: ' . $e->getMessage());
             return Response::json(['donation' => null]);
         }
+    }
+
+    /** Текущий пользователь для шапки/плеера. Ошибка базы не должна ронять главную. */
+    private static function currentUserSafe(): ?array
+    {
+        try {
+            return (new AuthRepo())->currentUser();
+        } catch (\Throwable $e) {
+            error_log('[randommusic] currentUser: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    private static function registerPage(Request $req): Response
+    {
+        if ((new AuthRepo())->currentUser() !== null) {
+            return Response::redirect($req->base . '/upload');
+        }
+
+        return Response::html(View::render('register', [
+            'base'        => $req->base,
+            'token'       => (new AuthGuard())->issueToken('register', Client::id()),
+            'error'       => (string) $req->get('error', ''),
+            'usernameMin' => AuthRepo::usernameMin(),
+            'usernameMax' => AuthRepo::usernameMax(),
+            'passwordMin' => Config::int('AUTH_PASSWORD_MIN', 8),
+        ]));
+    }
+
+    private static function registerPost(Request $req): Response
+    {
+        $client = Client::id();
+        $guard  = new AuthGuard();
+
+        [$verdict] = $guard->check(
+            'register',
+            $client,
+            $req->post('token'),
+            trim($req->post('website')),
+            Config::int('AUTH_RATE_REGISTER_PER_HOUR', 5)
+        );
+        if ($verdict !== AuthGuard::OK) {
+            return self::redirectWithError($req, '/register', $verdict);
+        }
+        $guard->record('register', $client);
+
+        [$err] = (new AuthRepo())->register(
+            $req->post('username'),
+            $req->post('password'),
+            $req->post('password_confirm')
+        );
+        if ($err !== '') {
+            return self::redirectWithError($req, '/register', $err);
+        }
+
+        return Response::redirect($req->base . '/upload', 303);
+    }
+
+    private static function loginPage(Request $req): Response
+    {
+        if ((new AuthRepo())->currentUser() !== null) {
+            return Response::redirect($req->base . '/upload');
+        }
+
+        return Response::html(View::render('login', [
+            'base'  => $req->base,
+            'token' => (new AuthGuard())->issueToken('login', Client::id()),
+            'error' => (string) $req->get('error', ''),
+            'next'  => (string) $req->get('next', ''),
+        ]));
+    }
+
+    private static function loginPost(Request $req): Response
+    {
+        $client = Client::id();
+        $guard  = new AuthGuard();
+
+        [$verdict] = $guard->check(
+            'login',
+            $client,
+            $req->post('token'),
+            trim($req->post('website')),
+            Config::int('AUTH_RATE_LOGIN_PER_HOUR', 10)
+        );
+        if ($verdict !== AuthGuard::OK) {
+            return self::redirectWithError($req, '/login', $verdict);
+        }
+        $guard->record('login', $client);
+
+        [$err] = (new AuthRepo())->login($req->post('username'), $req->post('password'));
+        if ($err !== '') {
+            return self::redirectWithError($req, '/login', $err);
+        }
+
+        $next = (string) $req->post('next');
+        $to = $next !== '' && str_starts_with($next, '/') && !str_starts_with($next, '//') ? $next : '/upload';
+
+        return Response::redirect($req->base . $to, 303);
+    }
+
+    private static function uploadPage(Request $req): Response
+    {
+        $user = (new AuthRepo())->currentUser();
+        if ($user === null) {
+            return Response::redirect($req->base . '/login?next=' . rawurlencode($req->base . '/upload'));
+        }
+
+        $uploads = new UploadRepo();
+
+        return Response::html(View::render('upload', [
+            'base'       => $req->base,
+            'user'       => $user,
+            'token'      => (new UploadGuard())->issueToken(Client::id()),
+            'error'      => (string) $req->get('error', ''),
+            'ok'         => $req->get('ok') !== null,
+            'pending'    => $uploads->countPendingForUser((int) $user['id']),
+            'maxPending' => Config::int('UPLOAD_MAX_PENDING_PER_USER', 1),
+            'maxBytes'   => Config::int('UPLOAD_MAX_BYTES', 26214400),
+            'mine'       => $uploads->listForUser((int) $user['id'], 20),
+        ]));
+    }
+
+    private static function uploadPost(Request $req): Response
+    {
+        $user = (new AuthRepo())->currentUser();
+        if ($user === null) {
+            return Response::error('auth_required', 401);
+        }
+
+        $uploads = new UploadRepo();
+        $maxPending = Config::int('UPLOAD_MAX_PENDING_PER_USER', 1);
+        if ($uploads->countPendingForUser((int) $user['id']) >= $maxPending) {
+            return self::redirectWithError($req, '/upload', 'too_many_pending');
+        }
+
+        $client = Client::id();
+        $guard  = new UploadGuard();
+
+        [$verdict] = $guard->check(
+            $client,
+            $req->post('token'),
+            trim($req->post('website')),
+            Config::int('UPLOAD_RATE_PER_DAY', 5)
+        );
+        if ($verdict !== UploadGuard::OK) {
+            return self::redirectWithError($req, '/upload', $verdict);
+        }
+
+        $file = $req->file('track');
+        if ($file === null) {
+            return self::redirectWithError($req, '/upload', 'no_file');
+        }
+
+        $guard->record($client);
+
+        $result = (new UploadService())->receive(
+            $file,
+            (int) $user['id'],
+            (string) $user['username'],
+            $req->post('artist'),
+            $req->post('title')
+        );
+
+        if (!$result['ok']) {
+            return self::redirectWithError($req, '/upload', $result['error'] ?? 'upload_failed');
+        }
+
+        return Response::redirect($req->base . '/upload?ok=1', 303);
+    }
+
+    private static function redirectWithError(Request $req, string $path, string $error): Response
+    {
+        return Response::redirect($req->base . $path . '?error=' . rawurlencode($error), 303);
     }
 
     private static function trackRandom(Request $req): Response
@@ -279,8 +481,14 @@ final class Kernel
         // поэтому такой запрос обрабатываем и возвращаем на страницу.
         $wantsHtml = !$req->isAjax();
 
-        $name    = trim($req->post('name'));
         $content = trim($req->post('content'));
+
+        // Вошедший не выбирает имя в чате — что бы ни пришло в поле name
+        // (пустое поле на странице, спрятанное, подделанное через devtools),
+        // решает сервер по сессии. Подмена имени с клиента так не работает.
+        $authUser = (new AuthRepo())->currentUser();
+        $userId   = $authUser['id'] ?? null;
+        $name     = $authUser !== null ? $authUser['username'] : trim($req->post('name'));
 
         [$verdict, $details] = $guard->check(
             $client,
@@ -313,7 +521,9 @@ final class Kernel
             $content,
             $client,
             $trackId > 0 ? $trackId : null,
-            $verdict === Guard::SHADOW
+            $verdict === Guard::SHADOW,
+            'web',
+            $userId
         );
 
         if ($wantsHtml) {
@@ -380,6 +590,18 @@ final class Kernel
             $problems[] = 'donations_db';
         }
 
+        try {
+            (new AuthRepo())->currentUser();
+        } catch (\Throwable) {
+            $problems[] = 'auth_db';
+        }
+
+        try {
+            (new UploadRepo())->listPending(1);
+        } catch (\Throwable) {
+            $problems[] = 'uploads_db';
+        }
+
         return Response::json([
             'ok'       => $problems === [],
             'problems' => $problems,
@@ -394,6 +616,9 @@ final class Kernel
               . "Allow: /\n"
               . "Disallow: /admin\n"
               . "Disallow: /api/\n"
+              . "Disallow: /register\n"
+              . "Disallow: /login\n"
+              . "Disallow: /upload\n"
               . "\n"
               . 'Sitemap: ' . $req->origin() . $req->base . "/sitemap.xml\n";
 
@@ -450,8 +675,11 @@ final class Kernel
         $guard  = new Guard();
         $client = Client::id();
 
-        $name    = trim($req->post('name'));
         $content = trim($req->post('content'));
+
+        $authUser = (new AuthRepo())->currentUser();
+        $userId   = $authUser['id'] ?? null;
+        $name     = $authUser !== null ? $authUser['username'] : trim($req->post('name'));
 
         $maxLen  = Config::int('CHAT_MAX_LEN', 256);
         $maxName = Config::int('CHAT_MAX_NAME', 32);
@@ -468,7 +696,7 @@ final class Kernel
         }
 
         $guard->record($client);
-        $repo->add($name, $content, $client, null, $verdict === Guard::SHADOW, 'web-legacy');
+        $repo->add($name, $content, $client, null, $verdict === Guard::SHADOW, 'web-legacy', $userId);
 
         // v1 не смотрел на тело ответа
         return Response::noContent();
@@ -584,7 +812,7 @@ final class Kernel
         $stamp = 0;
         $files = ['/assets/css/app.css', '/assets/js/app.js',
                   '/assets/js/player.js', '/assets/js/chat.js',
-                  '/assets/js/donate.js'];
+                  '/assets/js/donate.js', '/assets/js/modal.js'];
         foreach ($files as $f) {
             $stamp = max($stamp, (int) @filemtime($docroot . $f));
         }
