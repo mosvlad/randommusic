@@ -9,10 +9,11 @@ use RuntimeException;
 /**
  * Клиент DonationAlerts API.
  *
- * Донаты приходят на публичную страницу автора
- * (https://www.donationalerts.com/r/faust_z). Забрать их список можно
- * официальным REST: GET /api/v1/alerts/donations с Bearer-токеном и
- * правом oauth-donation-index.
+ * Донаты приходят на публичную страницу автора (DONATIONALERTS_URL,
+ * сейчас https://dalink.to/faust_z — короткая ссылка поверх того же
+ * DonationAlerts). Забрать их список можно официальным REST:
+ * GET /api/v1/alerts/donations с Bearer-токеном и правом
+ * oauth-donation-index — сама API-часть от смены ссылки не зависит.
  *
  * Авторизация — OAuth2 Authorization Code, один раз через bin/donations-auth.
  * Access-токен DonationAlerts живёт около 20 лет, так что обновление по

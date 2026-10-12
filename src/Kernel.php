@@ -194,7 +194,7 @@ final class Kernel
             'stats'        => $index->stats(),
             'online'       => $chat->online(),
             'lastDonation' => self::lastDonation(),
-            'donateUrl'    => (string) Config::get('DONATIONALERTS_URL', 'https://www.donationalerts.com/r/faust_z'),
+            'donateUrl'    => (string) Config::get('DONATIONALERTS_URL', 'https://dalink.to/faust_z'),
             'user'        => self::currentUserSafe(),
             'maxLen'      => Config::int('CHAT_MAX_LEN', 256),
             'maxName'     => Config::int('CHAT_MAX_NAME', 32),

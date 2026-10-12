@@ -203,7 +203,7 @@ CSP расширяется автоматически, когда счётчик
 
 Донаты приходят на страницу автора в DonationAlerts
 (`DONATIONALERTS_URL`, по умолчанию
-[donationalerts.com/r/faust_z](https://www.donationalerts.com/r/faust_z)).
+[dalink.to/faust_z](https://dalink.to/faust_z)).
 На главной под плеером — полоса с последним донатом (имя, сумма,
 сообщение) и контурная кнопка «Поддержать проект»; ссылка «Поддержать»
 продублирована в подвале.
